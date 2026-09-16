@@ -1,0 +1,256 @@
+/**
+ * 界面文案表。
+ *
+ * 每条 key 一份 zh / en。`t(key)` 只做查表，不做插值 —— 需要拼参数的地方
+ * 在调用处拼（比如 `${n} 条`），文案保持纯字符串，省掉一套模板语法。
+ *
+ * 加新文案时：往这里加一条 key，然后 `t("yourKey")`。找不到 key 时会返回 key
+ * 本身并在控制台留一条警告 —— 文案缺失在预览里一眼能看出来，不该静默成空白。
+ */
+import { initialLang, type Lang } from "./lang";
+
+/** 当前生效语言。由 `useLangSync` 在设置加载后更新；首屏前先取 `initialLang()`。 */
+let current: Lang = initialLang();
+
+export function setLang(lang: Lang): void {
+  current = lang;
+}
+
+const TABLE = {
+  // ---------- 面板 ----------
+  searchPlaceholder: { zh: "搜索历史…", en: "Search history…" },
+  filterAll: { zh: "全部", en: "All" },
+  filterText: { zh: "文本", en: "Text" },
+  filterImage: { zh: "图片", en: "Image" },
+  filterFiles: { zh: "文件", en: "Files" },
+  filterLink: { zh: "链接", en: "Link" },
+  filterColor: { zh: "颜色", en: "Color" },
+  sectionPinned: { zh: "置顶", en: "Pinned" },
+  sectionRecent: { zh: "最近", en: "Recent" },
+  sectionAll: { zh: "全部记录", en: "All" },
+  emptyTitle: { zh: "还没有剪贴板历史", en: "No clipboard history yet" },
+  emptyHint: { zh: "复制任意文本，1 秒内会出现在这里", en: "Copy anything — it shows up here within a second" },
+  emptySearchTitle: { zh: "没有匹配的记录", en: "No matching items" },
+  emptySearchHint: { zh: "试试更短的关键词，或按 Esc 清空搜索", en: "Try a shorter keyword, or Esc to clear" },
+  previewHint: { zh: "选择一条记录查看预览", en: "Select an item to preview" },
+  previewCollapse: { zh: "折叠预览区", en: "Collapse preview" },
+  previewExpand: { zh: "展开预览区", en: "Expand preview" },
+  previewImageMissing: { zh: "图片文件不可用", en: "Image file unavailable" },
+  previewEmptyFiles: { zh: "空文件列表", en: "Empty file list" },
+  previewRichText: { zh: "富文本预览", en: "Rich text preview" },
+  statusSelect: { zh: "选择", en: "select" },
+  statusPaste: { zh: "粘贴", en: "paste" },
+  statusPin: { zh: "置顶", en: "pin" },
+  statusDelete: { zh: "删除", en: "delete" },
+  statusFilter: { zh: "筛选", en: "filter" },
+  statusClose: { zh: "关闭", en: "close" },
+  statusSettings: { zh: "设置", en: "Settings" },
+  panelPin: { zh: "钉住桌面", en: "Pin to desktop" },
+  panelUnpin: { zh: "取消钉住", en: "Unpin from desktop" },
+  itemPin: { zh: "置顶（P）", en: "Pin (P)" },
+  itemUnpin: { zh: "取消置顶（P）", en: "Unpin (P)" },
+  itemDelete: { zh: "删除（Delete）", en: "Delete (Del)" },
+  itemEmptyFiles: { zh: "空文件列表", en: "Empty file list" },
+  pastePlainText: { zh: "粘贴为纯文本", en: "Paste as plain text" },
+  groupAll: { zh: "全部分组", en: "All groups" },
+  groupAssign: { zh: "设置分组", en: "Assign group" },
+  groupCreate: { zh: "新建分组", en: "New group" },
+  groupCreatePrompt: { zh: "输入分组名称", en: "Enter group name" },
+  groupRename: { zh: "重命名", en: "Rename" },
+  groupRenamePrompt: { zh: "输入新的分组名称", en: "Enter new group name" },
+  groupDelete: { zh: "删除分组", en: "Delete group" },
+  groupDeleteConfirm: { zh: "删除分组？其中条目将变为未分组。", en: "Delete group? Its items will become ungrouped." },
+  groupNone: { zh: "未分组", en: "Ungrouped" },
+  groupEmptyTitle: { zh: "这个分组还没有记录", en: "No items in this group" },
+  groupEmptyHint: { zh: "右键「设置分组」归类条目，或切回「全部分组」", en: "Assign items via context menu, or switch back to All groups" },
+  groupColor: { zh: "分组颜色", en: "Group color" },
+  colorMint: { zh: "薄荷", en: "Mint" },
+  colorSky: { zh: "天青", en: "Sky" },
+  colorIndigo: { zh: "靛紫", en: "Indigo" },
+  colorLotus: { zh: "藕荷", en: "Lotus" },
+  colorClay: { zh: "陶土", en: "Clay" },
+  colorAmber: { zh: "琥珀", en: "Amber" },
+  colorMoss: { zh: "苔绿", en: "Moss" },
+  colorGraphite: { zh: "石墨", en: "Graphite" },
+  groupSort: { zh: "调整顺序", en: "Reorder" },
+  groupSortMoveUp: { zh: "上移", en: "Move up" },
+  groupSortMoveDown: { zh: "下移", en: "Move down" },
+  groupSortDone: { zh: "完成", en: "Done" },
+  groupSortHint: { zh: "用 ↑ ↓ 调整分组顺序", en: "Use ↑ ↓ to reorder groups" },
+  dropHint: { zh: "拖到分组上归类", en: "Drop onto a group" },
+  multiSelected: { zh: "已选", en: "Selected" },
+  multiAssign: { zh: "归类到…", en: "Move to…" },
+  multiClear: { zh: "取消选择", en: "Clear selection" },
+  multiDelete: { zh: "删除选中", en: "Delete selected" },
+  multiHint: { zh: "Ctrl 点击多选 · Shift 连选 · Ctrl+A 全选", en: "Ctrl+click to multi-select · Shift to extend · Ctrl+A for all" },
+  addTag: { zh: "添加标签", en: "Add tag" },
+  tagPrompt: { zh: "输入标签名称（不含 #）", en: "Enter tag name (without #)" },
+  copyMarkdown: { zh: "复制 Markdown 链接", en: "Copy Markdown link" },
+  copyValue: { zh: "复制", en: "Copy" },
+  copySuccess: { zh: "已复制", en: "Copied" },
+  copyError: { zh: "复制失败", en: "Copy failed" },
+  editTitle: { zh: "编辑条目", en: "Edit item" },
+  editHint: { zh: "Enter 粘贴 · Ctrl+Enter 纯文本粘贴 · Esc 放弃", en: "Enter paste · Ctrl+Enter plain · Esc cancel" },
+  typeText: { zh: "文本", en: "Text" },
+  typeRichText: { zh: "富文本", en: "Rich text" },
+  typeImage: { zh: "图片", en: "Image" },
+  typeFiles: { zh: "文件", en: "Files" },
+  typeLink: { zh: "链接", en: "Link" },
+  typeColor: { zh: "颜色", en: "Color" },
+  unknownSource: { zh: "未知来源", en: "Unknown source" },
+
+  // ---------- 设置窗口 ----------
+  navGeneral: { zh: "通用", en: "General" },
+  navHotkey: { zh: "快捷键", en: "Hotkey" },
+  navStorage: { zh: "存储", en: "Storage" },
+  navPrivacy: { zh: "隐私", en: "Privacy" },
+  navBehavior: { zh: "行为", en: "Behavior" },
+  navSnippets: { zh: "片段库", en: "Snippets" },
+  navTags: { zh: "标签", en: "Tags" },
+  navAbout: { zh: "关于", en: "About" },
+  tagsTitle: { zh: "标签", en: "Tags" },
+  tagsHint: { zh: "重命名、合并或删除标签。合并会把条目归属整体搬到另一个标签下；删除只解绑标签，不影响条目本身。面板搜索框支持 tag:标签名 语法。", en: "Rename, merge, or delete tags. Merging moves every item under another tag; deleting only unlinks the tag and leaves items untouched. The panel search supports the tag:name syntax." },
+  tagsLoading: { zh: "正在读取标签…", en: "Loading tags…" },
+  tagsEmpty: { zh: "还没有标签。在面板里给条目打标签后会出现在这里。", en: "No tags yet. Tag an item in the panel and it shows up here." },
+  tagsCountUnit: { zh: "条", en: "items" },
+  tagsRename: { zh: "重命名", en: "Rename" },
+  tagsMerge: { zh: "合并", en: "Merge" },
+  tagsDelete: { zh: "删除", en: "Delete" },
+  tagsConfirm: { zh: "确定", en: "OK" },
+  tagsCancel: { zh: "取消", en: "Cancel" },
+  tagsRenamePlaceholder: { zh: "新名称", en: "New name" },
+  tagsMergeInto: { zh: "合并到", en: "Merge into" },
+  tagsMergeHint: { zh: "合并后这个标签会消失，条目归属全部转到目标标签。", en: "This tag disappears; all its items move to the target tag." },
+  tagsDeleteConfirm: { zh: "确认删除？条目本身不受影响。", en: "Delete it? Items are not affected." },
+  tagsRenamed: { zh: "标签已重命名", en: "Tag renamed" },
+  tagsMerged: { zh: "标签已合并", en: "Tags merged" },
+  tagsDeleted: { zh: "标签已删除", en: "Tag deleted" },
+
+  brandSettings: { zh: "设置", en: "Settings" },
+  loading: { zh: "正在读取设置…", en: "Loading settings…" },
+  settingsUnavailable: { zh: "设置不可用", en: "Settings unavailable" },
+
+  // Snippets MVP
+  snippetsTitle: { zh: "片段库", en: "Snippets" },
+  snippetsEmpty: { zh: "还没有片段。创建一个常用文本片段吧。", en: "No snippets yet. Create a reusable text snippet below." },
+  snippetsLoading: { zh: "正在读取片段…", en: "Loading snippets…" },
+  snippetsPaste: { zh: "粘贴", en: "Paste" },
+  snippetsEdit: { zh: "编辑片段", en: "Edit snippet" },
+  snippetsDelete: { zh: "删除", en: "Delete" },
+  snippetsDeleteConfirm: { zh: "确认删除此片段？", en: "Delete this snippet?" },
+  snippetsCreate: { zh: "新建片段", en: "New snippet" },
+  snippetsTitlePlaceholder: { zh: "标题", en: "Title" },
+  snippetsContentPlaceholder: { zh: "内容", en: "Content" },
+  snippetsTagsPlaceholder: { zh: "标签（可选）", en: "Tags (optional)" },
+  snippetsShortcutPlaceholder: { zh: "全局快捷键（可选，如 Ctrl+Alt+1）", en: "Global shortcut (optional, e.g. Ctrl+Alt+1)" },
+  snippetsSave: { zh: "保存", en: "Save" },
+  snippetsCancel: { zh: "取消", en: "Cancel" },
+  snippetsSaved: { zh: "片段已保存", en: "Snippet saved" },
+  snippetsDeleted: { zh: "片段已删除", en: "Snippet deleted" },
+  snippetsPasted: { zh: "已发送粘贴请求", en: "Paste requested" },
+  snippetsPasteHint: { zh: "粘贴到唤起面板前的应用。浏览器预览仅模拟粘贴。", en: "Paste into the app active before opening the panel. Browser preview only simulates paste." },
+  snippetsShortcutHint: { zh: "填了快捷键的片段会注册成全局热键，在任意应用里按下即可粘贴。与面板热键、其它片段冲突时会拒绝保存。", en: "A snippet with a shortcut is registered as a global hotkey — press it in any app to paste. Conflicting with the panel hotkey or another snippet is rejected." },
+  // 通用页
+
+  sectionLanguage: { zh: "语言", en: "Language" },
+  languageLabel: { zh: "界面语言", en: "Language" },
+  languageHint: { zh: "跟随系统 / 简体中文 / English", en: "System / 简体中文 / English" },
+  langSystem: { zh: "跟随系统", en: "System" },
+  langZh: { zh: "简体中文", en: "简体中文" },
+  langEn: { zh: "English", en: "English" },
+  sectionStartup: { zh: "启动", en: "Startup" },
+  autostartLabel: { zh: "开机自启", en: "Launch at login" },
+  autostartHint: { zh: "登录 Windows 后自动运行，默认关闭", en: "Run automatically at login; off by default" },
+
+  // 快捷键页
+  hotkeySection: { zh: "唤起面板", en: "Show panel" },
+  hotkeyLabel: { zh: "全局快捷键", en: "Global shortcut" },
+  hotkeyHint: { zh: "在任何应用里按下都能唤出 Plico 面板", en: "Brings up the Plico panel from any app" },
+  plainHotkeySection: { zh: "粘贴为纯文本", en: "Paste as plain text" },
+  plainHotkeyLabel: { zh: "全局快捷键", en: "Global shortcut" },
+  plainHotkeyHint: { zh: "在任何应用里按下都能把最近一条文本记录作为纯文本粘贴", en: "Pastes the most recent text item as plain text from any app" },
+  hotkeyRecording: { zh: "请按下组合键…", en: "Press a shortcut…" },
+  hotkeyRecord: { zh: "录制", en: "Record" },
+  hotkeyCancel: { zh: "取消", en: "Cancel" },
+  hotkeyReset: { zh: "恢复默认", en: "Reset" },
+  hotkeyBadKey: { zh: "这个键不能单独作为主键，换一个", en: "That key can't be used alone — try another" },
+  hotkeyNeedModifier: { zh: "至少要带一个修饰键（Ctrl / Alt / Shift / Win）", en: "Needs at least one modifier (Ctrl / Alt / Shift / Win)" },
+  hotkeyTaken: { zh: "这个组合注册不上，可能已被其它程序占用", en: "That combo can't be registered — probably taken by another app" },
+
+  // 存储页
+  storageSection: { zh: "容量", en: "Capacity" },
+  maxItemsLabel: { zh: "最大条目数", en: "Max items" },
+  maxItemsHint: { zh: "超出后删除最旧的未置顶条目；置顶条目永不因容量被删", en: "Oldest unpinned items are removed past this; pinned items are never evicted" },
+  retentionLabel: { zh: "保留时长", en: "Retention" },
+  retentionHint: { zh: "超过这个天数的未置顶条目会被自动清理", en: "Unpinned items older than this are cleaned up" },
+  imageQuotaLabel: { zh: "图片总容量", en: "Image quota" },
+  imageQuotaHint: { zh: "超出后删除最旧的未置顶图片条目", en: "Oldest unpinned images are removed past this" },
+  cleanupSection: { zh: "清理", en: "Cleanup" },
+  historyLabel: { zh: "当前历史", en: "History" },
+  historyRefresh: { zh: "刷新", en: "Refresh" },
+  clearLabel: { zh: "清空历史", en: "Clear history" },
+  clearHint: { zh: "默认保留置顶条目，此操作不可撤销", en: "Pinned items are kept by default; cannot be undone" },
+  clearConfirm: { zh: "确认清空", en: "Confirm" },
+  clearCancel: { zh: "取消", en: "Cancel" },
+  clearDone: { zh: "已清空", en: "cleared" },
+  unitItems: { zh: "条", en: "items" },
+  unitDays: { zh: "天", en: "days" },
+  unitMs: { zh: "毫秒", en: "ms" },
+
+  // 隐私页
+  privacyAppTitle: { zh: "应用排除", en: "Excluded apps" },
+  privacyAppNote: { zh: "这些应用在前台时，复制的内容不会被记录。填进程名即可，带不带 .exe 都行，大小写不敏感。", en: "When these apps are in the foreground, copied content is not recorded. Process name only — .exe optional, case-insensitive." },
+  privacyContentTitle: { zh: "内容规则", en: "Content rules" },
+  privacyContentNote: { zh: "内容匹配正则表达式时跳过不记录，比如用 \\d{16} 挡掉银行卡号。正则写错会在添加时直接报错，不会存进去静默失效。", en: "Content matching a regex is skipped — e.g. \\d{16} blocks card numbers. Bad regexes are rejected on add rather than silently ignored." },
+  privacyBoundsTitle: { zh: "已知边界", en: "Known limits" },
+  privacyBoundsNote: { zh: "拿不到前台进程名时，应用排除规则不会生效 —— 宁可多记一条，也不要因为取不到进程名就把内容静默丢掉。", en: "When the foreground process can't be identified, app rules don't fire — better to record one extra item than silently drop content." },
+  privacyAppPlaceholder: { zh: "1Password.exe", en: "1Password.exe" },
+  privacyAppAdd: { zh: "添加应用", en: "Add app" },
+  privacyAppEmpty: { zh: "还没有排除的应用", en: "No excluded apps yet" },
+  privacyContentPlaceholder: { zh: "\\d{16}", en: "\\d{16}" },
+  privacyContentAdd: { zh: "添加规则", en: "Add rule" },
+  privacyContentEmpty: { zh: "还没有内容规则", en: "No content rules yet" },
+
+  // 行为页
+  behaviorSection: { zh: "面板显示", en: "Panel" },
+  positionLabel: { zh: "面板位置", en: "Position" },
+  positionHint: { zh: "跟随光标：出现在鼠标所在屏幕的中上方", en: "Cursor: centered near the top of the screen under the mouse" },
+  positionCursor: { zh: "跟随光标", en: "Follow cursor" },
+  positionRemember: { zh: "记住位置", en: "Remember" },
+  blurHideLabel: { zh: "失焦自动隐藏", en: "Hide on blur" },
+  blurHideHint: { zh: "点到别处就收起面板", en: "Hide the panel when clicking elsewhere" },
+  hideDelayLabel: { zh: "隐藏延迟", en: "Hide delay" },
+  hideDelayHint: { zh: "留一点缓冲，避免点击面板内部控件时被误判为失焦", en: "Small buffer so clicks inside the panel aren't mistaken for losing focus" },
+  keyboardSection: { zh: "键盘", en: "Keyboard" },
+  vimLabel: { zh: "Vim 模式", en: "Vim mode" },
+  vimHint: { zh: "在面板里用 J / K 上下移动选中项（F5）", en: "Use J / K to move the selection in the panel" },
+  pasteSection: { zh: "粘贴", en: "Paste" },
+  restoreLabel: { zh: "粘贴后恢复剪贴板", en: "Restore clipboard after paste" },
+  restoreHint: { zh: "粘贴完成约 0.6 秒后把剪贴板还原为粘贴前的内容；恢复本身不会产生新历史记录", en: "About 0.6s after paste, the clipboard is restored to its pre-paste content; the restore itself is not recorded" },
+  behaviorKeys1: { zh: "面板快捷键：↑ ↓ 或 Ctrl+P / Ctrl+N 移动选中，Enter 粘贴，P 置顶，Delete 删除，Tab 切筛选，Esc 关闭。", en: "Panel keys: ↑ ↓ or Ctrl+P / Ctrl+N to move, Enter to paste, P to pin, Delete to remove, Tab to cycle filter, Esc to close." },
+  behaviorKeys2: { zh: "搜索框里已经有内容时，单键快捷键（P / J / K）让位给输入。", en: "When the search box has content, single-key shortcuts (P / J / K) yield to typing." },
+
+  // 关于页
+  aboutVersion: { zh: "版本", en: "Version" },
+  aboutTagline: { zh: "本地优先的剪贴板历史管理器", en: "Local-first clipboard history manager" },
+  aboutPrivacy: { zh: "所有数据只存在本机，不联网、不上传、不遥测。面板快捷键唤出，方向键选择，回车粘贴。", en: "All data stays on this machine. No network, no upload, no telemetry." },
+  aboutDataDir: { zh: "数据目录", en: "Data directory" },
+  aboutDb: { zh: "数据库", en: "Database" },
+  openButton: { zh: "打开", en: "Open" },
+} as const;
+
+export type MsgKey = keyof typeof TABLE;
+
+/**
+ * 取一条文案。`lang` 为 undefined 时用 `?lang=` / 本地缓存 / 系统语言兜底，
+ * 和主题层「首屏用缓存、加载完覆盖」是同一个节奏。
+ */
+export function t(key: MsgKey, lang?: Lang): string {
+  const entry = TABLE[key];
+  if (!entry) {
+    console.warn(`[i18n] 缺失文案 key: ${key}`);
+    return key;
+  }
+  const l = lang ?? current;
+  return entry[l];
+}

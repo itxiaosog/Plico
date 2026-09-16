@@ -1,0 +1,33 @@
+{
+  "name": "plico",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Plico - 桌面剪贴板管理器",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build"
+  },
+  "dependencies": {
+    "@pxlkit/ui-kit": "^2.1.1",
+    "@tauri-apps/api": "^2.1.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "zustand": "^4.5.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@tauri-apps/cli": "^2.1.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^4.3.3",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  }
+}

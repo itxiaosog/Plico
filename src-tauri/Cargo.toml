@@ -1,0 +1,77 @@
+[package]
+name = "plico"
+version = "0.1.0"
+description = "Plico - 桌面剪贴板管理器"
+authors = ["小宋"]
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "plico_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png", "protocol-asset"] }
+tauri-plugin-single-instance = "2"
+tauri-plugin-global-shortcut = "2"
+# F11 开机自启
+tauri-plugin-autostart = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+thiserror = "2"
+# F10 内容规则（用户自定义正则）
+regex = "1"
+
+# F18 `{{cursor}}` 定位：粘贴后靠模拟 N 次 Left 方向键把光标挪回占位符处，
+# 而方向键在编辑器里按「一个视觉字符」走 —— 所以 N 必须按**字素簇**数，
+# 不是 Unicode scalar 数。emoji ZWJ 序列（👨‍👩‍👧 = 5 scalar）、组合字符
+# （e + U+0301 = 2 scalar）、旗帜（🇨🇳 = 2 scalar）在两者之间都会差出来。
+# 它本来就在依赖树里（1.13.3），提为直接依赖不增加构建量。
+unicode-segmentation = "1"
+
+# SQLite：bundled 会把 SQLite 源码一起编译进来，避免依赖系统 sqlite3。
+# 注意：bundled 需要一个可用的 C 编译器（MSVC 的 cl.exe）。
+rusqlite = { version = "0.32", features = ["bundled"] }
+
+# 剪贴板读写
+arboard = "3"
+
+# F12 图片：剪贴板位图 → PNG 落盘 + 缩略图生成。
+# 只开 png 编解码 —— 剪贴板给的是裸 RGBA，落盘目标也只有 PNG 一种，
+# 不必把 jpeg/gif/webp 整套格式拖进来。
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_System_DataExchange",
+    "Win32_System_Threading",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+# 模拟粘贴：向当前焦点窗口发送 Ctrl+V / Cmd+V
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+enigo = "0.2"
+
+[profile.release]
+# 限制并行度 + thin LTO：在这台 32GB 机器上并行编译 windows/icu/brotli 等
+# 巨型 crate 会触发 rustc STATUS_STACK_BUFFER_OVERRUN（内存压力导致栈损坏）。
+# 用 16 codegen units + thin LTO 降低单 crate 内存峰值；build.bat 加 -j 1 限制
+# 全局并行度。代价：二进制大约大 5~15%，但能可靠编过。
+codegen-units = 16
+lto = "thin"
+opt-level = "s"
+strip = true
+
+# 刻意**不设** `panic = "abort"`。
+#
+# 规格书第 7 节要求「监听线程崩溃自恢复（panic 后 5s 重启）」，而 abort 会在
+# panic 时直接终止整个进程，线程级恢复根本无从谈起 —— 托盘图标消失、用户
+# 完全无感地丢掉剪贴板记录。为一个后台常驻工具，能自己爬起来比省那几十 KB
+# 二进制重要得多。
+#
+# 代价：保留 unwind 表，release 产物大约大 10%~15%。
