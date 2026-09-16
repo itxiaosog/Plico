@@ -84,7 +84,6 @@ export default function SettingsApp() {
     void load();
   }, [load]);
 
-  // 后端广播设置变更（比如面板窗口改了主题）时重新拉一遍
   useEffect(() => {
     const un = listen("plico://settings-changed", () => {
       void load();
@@ -96,13 +95,10 @@ export default function SettingsApp() {
 
   useLangSync(settings?.language);
 
-  // Esc 收起设置窗口。录制快捷键时 Esc 被捕获阶段的监听器吃掉了，不会走到这里。
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || !isTauri) return;
 
-      // 光标在输入框里时 Esc 的含义是「放弃这次输入」（数字框已自行处理），
-      // 不该把整个窗口收起来 —— 那会把用户填了一半的规则一起弄丢。
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
 

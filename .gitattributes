@@ -1,25 +1,9 @@
-# 换行符规范化
-# ============================================================================
-# 仓库里统一存 LF，不再依赖每个人各自的 core.autocrlf 设置。
-# 这同时消掉了 Windows 上（core.autocrlf=true）git add 时会刷的一屏
-# "LF will be replaced by CRLF" 提示 —— 那只是提示，不是错误，但很吵。
-#
-# 约定：文件在仓库里长什么样，由这个文件说了算。
-# 参考 https://git-scm.com/docs/gitattributes#_end_of_line_conversion
-# ============================================================================
-
-# 默认：文本文件全部按 LF 存取
 * text=auto eol=lf
 
-# --- Windows 脚本必须保持 CRLF ------------------------------------------
-# cmd.exe 解析批处理时，裸 LF 在 goto / :label 场景下有已知的解析问题
-# （会跳错行甚至直接失败）。所以这几个后缀强制检出为 CRLF。
 *.bat text eol=crlf
 *.cmd text eol=crlf
 *.ps1 text eol=crlf
 
-# --- 二进制资源：禁止换行符转换，也不做文本 diff ------------------------
-# 漏标这些的后果是 git 试图"规范化"图片和字体字节，产物直接损坏。
 *.png  binary
 *.ico  binary
 *.icns binary

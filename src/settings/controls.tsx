@@ -1,10 +1,3 @@
-/**
- * 设置页的通用控件。
- *
- * 全部是受控组件：值来自 store，改动通过回调上抛。数字输入是例外 ——
- * 它在内部保留一份草稿字符串，只在失焦 / 回车时提交。否则用户输入过程中
- * 每敲一个字符就写一次库，而且「清空再输」这种中间态会被钳制成一个荒唐的值。
- */
 import { useEffect, useState, type ReactNode } from "react";
 import {
   PixelButton,
@@ -31,7 +24,6 @@ export function Row({
   label: string;
   hint?: ReactNode;
   children?: ReactNode;
-  /** 内容需要占满整行（比如规则列表）时用。 */
   stacked?: boolean;
 }) {
   return (
@@ -54,7 +46,6 @@ export function Switch({
   disabled?: boolean;
   onChange(next: boolean): void;
 }) {
-  // 行内文案已经由 Row 的 label 承担，这里的 label 只为满足必填签名
   return (
     <PixelSwitch
       label=""
@@ -108,7 +99,6 @@ export function NumberField({
 }) {
   const [draft, setDraft] = useState(String(value));
 
-  // 外部值变了（比如后端钳制后回写）就同步回草稿
   useEffect(() => {
     setDraft(String(value));
   }, [value]);
@@ -159,8 +149,6 @@ export function Button({
   variant?: "default" | "primary" | "danger";
   disabled?: boolean;
 }) {
-  // 旧 variant → pxlkit (variant, tone)。pxlkit 没有 "primary" 色调，
-  // 肯定动作用它的招牌 solid green；danger 维持描边款，别把确认区搞得太吵。
   const look =
     variant === "primary"
       ? ({ variant: "solid", tone: "green" } as const)
@@ -174,7 +162,6 @@ export function Button({
   );
 }
 
-/** 顶部的错误条。设置写入失败时把后端原话摆出来，不做二次包装。 */
 export function ErrorBanner({ text, onClose }: { text: string; onClose(): void }) {
   return (
     <div className="pl-set-error" role="alert">

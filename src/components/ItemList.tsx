@@ -8,10 +8,6 @@ import { groupDotColor } from "../lib/palette";
 import { GroupDropBar } from "./GroupDropBar";
 import { ItemRow } from "./ItemRow";
 
-/**
- * 拖拽载荷的 MIME。自定义类型而不是 `text/plain`：往别的地方（比如编辑器）
- * 拖条目时不该把内容甩出去 —— 这个动作的语义只有「归到某个分组」。
- */
 const DRAG_MIME = "application/x-plico-items";
 
 export function ItemList() {
@@ -35,12 +31,10 @@ export function ItemList() {
   const [tagItem, setTagItem] = useState<number | null>(null);
   const [groupItem, setGroupItem] = useState<number | null>(null);
   const [newTag, setNewTag] = useState("");
-  /** 正在拖的条目数。> 0 时列表顶部换成投放条（F16）。 */
   const [dragCount, setDragCount] = useState(0);
 
   const listRef = useRef<HTMLDivElement>(null);
 
-  // 键盘移动选中项时，把它滚进可视区
   useEffect(() => {
     if (selectedItemId === null) return;
     const el = listRef.current?.querySelector<HTMLElement>(`[data-id="${selectedItemId}"]`);
@@ -52,18 +46,11 @@ export function ItemList() {
   const pinned = items.filter((i) => i.pinned);
   const recent = items.filter((i) => !i.pinned);
 
-  /**
-   * 拖拽载荷在**容器**上收（而不是每行各挂一个 onDragStart）：
-   * 拖哪一行要看当前选择，而「整组拖走」需要读到 store 里的 `selectedIds`，
-   * 放在一处比在每行里各判一次更不容易漏。
-   */
   const onDragStart = (e: DragEvent<HTMLDivElement>) => {
     const row = (e.target as HTMLElement).closest<HTMLElement>("[data-id]");
     if (!row?.dataset.id) return;
     const id = Number(row.dataset.id);
     const st = useClipboardStore.getState();
-    // 拖的这一行在多选里 → 整组一起归类；否则只拖它自己。
-    // mousedown 先于 dragstart 触发，所以拖一行没被选中的条目时它已经是选中项了。
     const ids = st.selectedIds.includes(id) ? st.selectedIds : [id];
     e.dataTransfer.setData(DRAG_MIME, JSON.stringify(ids));
     e.dataTransfer.effectAllowed = "move";
@@ -77,11 +64,6 @@ export function ItemList() {
     void assignGroupToSelection(groupId);
   };
 
-  /**
-   * 右键菜单里的「设置分组」：如果这一行在多选集合里，就作用于整组 ——
-   * 与文件管理器一致。否则用户选中 5 条之后右键其中一条，只会改到那一条，
-   * 而屏幕上还高亮着 5 条，看起来像 bug。
-   */
   const assignGroupFor = (itemId: number, groupId: number | null) => {
     const st = useClipboardStore.getState();
     if (st.selectedIds.length > 1 && st.selectedIds.includes(itemId)) {
@@ -120,8 +102,6 @@ export function ItemList() {
   };
 
   if (items.length === 0) {
-    // 空态要区分成因：搜索/类型筛选没命中、当前分组没条目、还是真的没有任何记录。
-    // 分组为空时不能说「还没有剪贴板历史」——库里明明有，是这个分组里没有。
     const searching = query.trim().length > 0 || filter !== "all";
     const inGroup = selectedGroupId !== null;
     return (
@@ -145,8 +125,6 @@ export function ItemList() {
       <div className="pl-list" ref={listRef} onDragStart={onDragStart} onDragEnd={onDragEnd}>
       <p role="status" className="pl-copy-feedback pl-copy-feedback--list" data-error={copy.status === "error"}>{copy.message}</p>
 
-      {/* 拖拽投放条 / 批量操作条共用同一个 sticky 位置：两者不会同时出现
-          （拖拽一结束投放条就收起），叠在一起反而会互相盖住。 */}
       {dragCount > 0 ? (
         <div className="pl-list-head">
           <GroupDropBar groups={groups} count={dragCount} onAssign={handleDropAssign} />

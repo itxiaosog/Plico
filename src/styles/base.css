@@ -1,23 +1,13 @@
-/* 像素主题基座（F22 改版：全应用单一像素主题，主题切换已移除）。
- *
- * pxlkit 的样式表基于 Tailwind v4 的 CSS-first 配置：第一个 import 拉起
- * Tailwind 本体，@source 让 Tailwind 扫描库源码把用到的 utility 生成出来。
- * 我们自己的代码不强制写 Tailwind class —— 它只是库的渲染基座。
- */
 @import "tailwindcss";
 @import "@pxlkit/ui-kit/styles.css";
 @source "../../node_modules/@pxlkit/ui-kit";
 
-/* 内置像素字体（OFL，许可文本随文件附带）。
- * PS2P 只覆盖拉丁区，中文落给 Fusion Pixel（缝合像素，12px 比例版）。
- * 顺序必须是 PS2P 在前：拉丁字形 PS2P 更有味道，CJK 由后者兜底。 */
 @font-face {
   font-family: "PS2P";
   src: url("../assets/fonts/PressStart2P-Regular.ttf") format("truetype");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
-  /* 只让它管拉丁/标点，CJK 别抢（它本来也没有 CJK 字形，写上更明确） */
   unicode-range: U+0000-00FF, U+2000-206F, U+3000-303F;
 }
 

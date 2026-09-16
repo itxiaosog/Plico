@@ -1,17 +1,7 @@
-//! 隐私过滤（F10）：命中规则的内容不入库。
-//!
-//! 两类规则：
-//!   - `app`     —— 按前台进程名排除（如 `1Password.exe`）
-//!   - `content` —— 按正则排除（如 16 位银行卡号）
-//!
-//! 规则每次复制时现查现用。剪贴板事件是人类节奏（每秒最多几次），这点查询
-//! 开销可以忽略；换来的是「改完规则立刻生效」，不用维护缓存失效逻辑。
-
 use regex::Regex;
 
 use crate::model::Rule;
 
-/// 命中任一启用规则即返回 `true`，调用方应跳过入库。
 pub fn is_blocked(rules: &[Rule], source_app: Option<&str>, text: &str) -> bool {
     rules.iter().any(|rule| match rule.kind.as_str() {
         Rule::KIND_APP => matches_app(&rule.value, source_app),
@@ -20,11 +10,8 @@ pub fn is_blocked(rules: &[Rule], source_app: Option<&str>, text: &str) -> bool 
     })
 }
 
-/// 进程名比较：忽略大小写，并统一去掉 `.exe` 后缀。
-/// 用户填 `1Password` 还是 `1password.exe` 都能命中。
 fn matches_app(rule_value: &str, source_app: Option<&str>) -> bool {
     let Some(source) = source_app else {
-        // 拿不到来源进程时不误杀 —— 宁可多记一条，也不要静默丢内容
         return false;
     };
     normalize_app(rule_value) == normalize_app(source)
@@ -38,8 +25,6 @@ fn normalize_app(name: &str) -> String {
         .to_string()
 }
 
-/// 正则匹配。规则写错了（编译不过）就当作不命中 —— 不能让一条坏规则
-/// 把整个剪贴板监听卡死。
 fn matches_content(pattern: &str, text: &str) -> bool {
     match Regex::new(pattern) {
         Ok(re) => re.is_match(text),

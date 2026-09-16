@@ -3,10 +3,6 @@ export interface Segment {
   hit: boolean;
 }
 
-/**
- * 把文本按关键字切成「命中 / 未命中」两段序列，用于渲染高亮。
- * 大小写不敏感，与后端 LIKE 的行为保持一致（F6）。
- */
 export function highlight(text: string, query: string): Segment[] {
   const q = query.trim();
   if (!q) {

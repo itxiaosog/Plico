@@ -14,13 +14,9 @@ body {
   background: var(--pl-bg-canvas);
   overflow: hidden;
   font-family: var(--pl-font-sans);
-  /* 像素字体要锐利边缘，关掉抗锯齿（对位图风格的字形是特性不是瑕疵） */
   -webkit-font-smoothing: none;
 }
 
-/* 浏览器预览模式：模拟真实面板的 760×480 尺寸，方便验收视觉。
-   像素主题没有玻璃材质 —— 周围铺一块棋盘格当「桌面」，衬托不透明面板；
-   真机上这些不生效（body 没有 pl-browser 类）。 */
 body.pl-browser,
 body.pl-browser-set {
   background-color: var(--retro-surface);
@@ -46,13 +42,10 @@ body.pl-browser #root {
   box-sizing: border-box;
 }
 
-/* ---------- 面板外壳 ---------- */
-
 .pl-panel {
   height: 100%;
   display: flex;
   flex-direction: column;
-  /* 缩放握把是绝对定位的，需要一个定位上下文 */
   position: relative;
   background: var(--pl-bg-surface);
   border: 2px solid var(--pl-border);
@@ -66,8 +59,6 @@ body.pl-browser #root {
   cursor: default;
 }
 
-/* ---------- 搜索栏 ---------- */
-
 .pl-search {
   display: flex;
   align-items: center;
@@ -76,7 +67,6 @@ body.pl-browser #root {
   padding: 0 14px;
   border-bottom: 2px solid var(--pl-border);
   flex-shrink: 0;
-  /* 搜索栏是无边框面板的拖动区，空白处提示可拖 */
   cursor: grab;
 }
 
@@ -84,7 +74,6 @@ body.pl-browser #root {
   cursor: grabbing;
 }
 
-/* input / 按钮 / 菜单恢复默认 cursor，不被拖动态覆盖 */
 .pl-search input,
 .pl-search button,
 .pl-search .pl-menu {
@@ -123,7 +112,6 @@ body.pl-browser #root {
   cursor: pointer;
   font-family: inherit;
   transition: background var(--pl-dur-fast) var(--pl-ease);
-  /* 选中分组时按钮会带上组名，名字长了不能把搜索框挤没 */
   max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -140,7 +128,6 @@ body.pl-browser #root {
   background: var(--pl-bg-accent-soft);
 }
 
-/* 筛选按钮按类型着色（激活态跟随选中类型的 retro 色） */
 .pl-filter.is-active[data-type="text"] { color: var(--pl-type-text); border-color: var(--pl-type-text); }
 .pl-filter.is-active[data-type="rich_text"] { color: var(--pl-type-rich_text); border-color: var(--pl-type-rich_text); }
 .pl-filter.is-active[data-type="image"] { color: var(--pl-type-image); border-color: var(--pl-type-image); }
@@ -203,17 +190,6 @@ body.pl-browser #root {
   color: var(--pl-accent-text);
 }
 
-/* ---------- 分组菜单里的内联编辑（F16） ----------
- *
- * 新建 / 重命名 / 删除确认都在这块空间里就地完成，不开系统 prompt 弹窗：
- * 原生 prompt 会挡住面板、样式也无法跟随主题，而分组名恰恰是「看着列表改」
- * 比较好用的东西。
- *
- * **两行结构**（输入框一行、色板 + 按钮一行）。一开始挤成一行做完，
- * 实测输入框被压到只剩 14px 宽 —— 8 个色点 89px 加两个按钮 40px 就把
- * 175px 的行吃光了，用户根本看不见自己在改什么。
- */
-
 .pl-gedit {
   flex: 1;
   min-width: 0;
@@ -230,7 +206,6 @@ body.pl-browser #root {
   min-width: 0;
 }
 
-/* 按钮推到右侧 */
 .pl-gedit__line--end {
   justify-content: flex-end;
 }
@@ -245,17 +220,9 @@ body.pl-browser #root {
   align-items: center;
   gap: 4px;
   padding: 2px;
-  /* 撑开菜单宽度。
-   *
-   * `.pl-menu` 的 `min-width` 只有 104px，而一行分组光是「两个排序按钮 + 颜色
-   * 圆点 + 名字 + 改名/删除」就需要 150px 以上。不给下限的话名字会被压到 27px
-   * （实测），显示成「工…」「收…」，排序模式更是几乎只剩按钮。
-   * 用 min-width 而不是给 `.pl-menu` 加固定宽度：筛选那几项（「全部」「文本」）
-   * 本身很窄，固定宽度会让它们左右留一大片空白。 */
   min-width: 168px;
 }
 
-/* 正常态那一行里的按钮要撑满、文字左对齐 —— 它本身是个 `.pl-menu__item`。 */
 .pl-group-row > .pl-menu__item {
   flex: 1;
   min-width: 0;
@@ -271,16 +238,6 @@ body.pl-browser #root {
   white-space: nowrap;
 }
 
-/* 分组行右侧「改名 / 删除」两个按钮的容器。
- *
- * **这条规则一度漏写**：`.pl-group-actions` 在 JSX 里存在，CSS 里却没有任何规则，
- * 于是它保持默认的 `display: inline` —— 而父级 `.pl-menu__item` 是 flex，
- * inline 子元素会被块级化成 `block`。里面两个按钮是 `display: flex`（块级），
- * 在块级容器里就**各占一行**：实测两按钮 x 相同、y 相差 22px，整行高度从 24px
- * 涨到 60px。表现出来正是「编辑图标和删除图标上下搓开、不在一起」。
- *
- * 面板条目的 `.pl-actions` 有规则，分组菜单这份漏了 —— 两处结构几乎一样，
- * 改一处时很容易忘记另一处。 */
 .pl-group-actions {
   display: flex;
   align-items: center;
@@ -288,17 +245,6 @@ body.pl-browser #root {
   flex: none;
   margin-left: 4px;
 }
-
-/* ---------- 分组排序（F16） ----------
- *
- * 打开排序模式后，每行左侧的圆点位置换成一对 ↑/↓ 按钮，行右侧的改名/删除
- * 一起让位。
- *
- * **按钮必须固定宽度且不能被压扁**（`flex: none` + 显式宽高）：首行禁用的 ↑ 和
- * 末行禁用的 ↓ 仍然占位，只是变灰 —— 藏起来的话整行宽度会随后续行的可点状态
- * 跳动，连点时很容易点错行。同理，`.pl-sort-ctl` 也 `flex: none`，
- * 让名字那一段去承担伸缩。
- */
 
 .pl-sort-ctl {
   flex: none;
@@ -336,7 +282,6 @@ body.pl-browser #root {
   cursor: default;
 }
 
-/* 删除确认的提示文案。 */
 .pl-gconfirm {
   flex: 1;
   min-width: 0;
@@ -345,7 +290,6 @@ body.pl-browser #root {
   color: var(--pl-danger);
 }
 
-/* 行内输入框。 */
 .pl-ginput {
   flex: 1;
   min-width: 0;
@@ -364,7 +308,6 @@ body.pl-browser #root {
   border-color: var(--pl-accent);
 }
 
-/* 行内的确定 / 取消按钮。比设置页的 `.pl-set-btn` 轻，因为这里的行高有限。 */
 .pl-gbtn {
   flex: none;
   padding: 4px 8px;
@@ -402,8 +345,6 @@ body.pl-browser #root {
   color: #fff;
 }
 
-/* ---------- 8 色分组色板（《前端视觉规范.md》§7） ---------- */
-
 .pl-color-row {
   display: flex;
   flex: none;
@@ -412,7 +353,6 @@ body.pl-browser #root {
   padding: 0 2px;
 }
 
-/* 色点 8px、方形（像素风）、无边框。选中态用一圈外描边表示。 */
 .pl-color-dot {
   width: 8px;
   height: 8px;
@@ -438,7 +378,6 @@ body.pl-browser #root {
   cursor: default;
 }
 
-/* ---------- 条目右键上下文菜单（F15）。与筛选下拉同一个 token 体系，只是定位换成 fixed。 ---------- */
 .pl-context-menu {
   position: fixed;
   z-index: 30;
@@ -452,7 +391,6 @@ body.pl-browser #root {
   flex-direction: column;
 }
 
-/* 标签 / 分组分配小弹层（F16/F17）。结构在 ItemList 里就地渲染。 */
 .pl-dialog {
   position: fixed;
   left: 50%;
@@ -507,8 +445,6 @@ body.pl-browser #root {
   cursor: pointer;
 }
 
-/* ---------- 主体：列表 + 预览 ---------- */
-
 .pl-body {
   flex: 1;
   display: flex;
@@ -527,10 +463,6 @@ body.pl-browser #root {
   width: 100%;
 }
 
-/* ---------- F16 拖拽归类 + 批量选择 ---------- */
-
-/* 投放条与批量操作条共用的吸附位置。sticky 而不是 fixed：它属于列表的
-   滚动内容，滚动时留在顶部就够了，没必要盖到预览区上。 */
 .pl-list-head {
   position: sticky;
   top: 0;
@@ -577,7 +509,6 @@ body.pl-browser #root {
     color var(--pl-dur-fast) var(--pl-ease);
 }
 
-/* 悬停态用实线 + 强调色：虚线是「可以放」，实线是「正在放这里」。 */
 .pl-drop-chip.is-over {
   border-style: solid;
   border-color: var(--pl-accent);
@@ -655,14 +586,10 @@ body.pl-browser #root {
   flex-shrink: 0;
 }
 
-/* ---------- F5 预览区折叠 + 面板缩放 ---------- */
-
-/* 折叠后列表区撑满整个宽度（规格书 F5）。 */
 .pl-body.is-preview-collapsed .pl-list {
   width: 100%;
 }
 
-/* 分隔线同时是折叠开关的载体。折叠后它仍然留着 —— 否则就没有「展开」的入口了。 */
 .pl-divider-v {
   position: relative;
 }
@@ -692,14 +619,10 @@ body.pl-browser #root {
   border-color: var(--pl-accent);
 }
 
-/* 折叠时分隔线贴着窗口右缘，居中的按钮会有一半被裁掉。
-   改成整个贴在线的左侧。 */
 .pl-divider-v.is-collapsed .pl-divider-toggle {
   transform: translate(-100%, -50%);
 }
 
-/* 面板右下角的缩放握把。放在状态栏上方 2px —— 状态栏右端是设置按钮，
-   压在上面会互相挡。 */
 .pl-resize-grip {
   position: absolute;
   right: 2px;
@@ -728,12 +651,10 @@ body.pl-browser #root {
   background: var(--pl-bg-preview);
   padding: 16px;
   overflow-y: auto;
-  /* column flex 对普通内容等价于块布局，但能让富文本 iframe 撑满剩余高度 */
   display: flex;
   flex-direction: column;
 }
 
-/* 富文本预览：iframe 占满 meta/time 以下的空间，文档内部自己滚动 */
 .pl-preview__html {
   flex: 1;
   min-height: 0;
@@ -742,8 +663,6 @@ body.pl-browser #root {
   display: block;
   background: transparent;
 }
-
-/* ---------- 分区标题 ---------- */
 
 .pl-section {
   padding: 0 14px 6px;
@@ -756,8 +675,6 @@ body.pl-browser #root {
   padding-top: 8px;
   border-top: 0.5px solid var(--pl-divider);
 }
-
-/* ---------- 条目行 ---------- */
 
 .pl-row {
   display: flex;
@@ -774,12 +691,9 @@ body.pl-browser #root {
 
 .pl-row.is-selected {
   background: var(--pl-bg-selected);
-  /* 像素选中态：主色淡底 + 左侧一条硬色条 */
   box-shadow: inset 3px 0 0 var(--retro-primary);
 }
 
-/* 批量选中的行（不含光标那一行）。用 subtle 而不是 selected：
-   整屏 selected 底色会把预览区对应的「当前项」淹没掉。 */
 .pl-row.is-multi {
   background: var(--pl-bg-subtle);
 }
@@ -798,18 +712,15 @@ body.pl-browser #root {
   justify-content: center;
   flex-shrink: 0;
   color: var(--pl-text-secondary);
-  /* 类型色调：每种条目类型一个 retro 色，徽标底色用对应色的淡底 */
   border: 2px solid transparent;
   transition: border-color var(--pl-dur-fast) var(--pl-ease);
 }
 
-/* 勾选态占的是同一个徽标位（尺寸不变，行高和左侧留白都不会跳）。 */
 .pl-badge.is-checked {
   background: var(--pl-bg-accent-soft);
   color: var(--pl-accent-text);
 }
 
-/* 类型着色：徽标边框 + 图标色跟随条目类型 */
 .pl-badge[data-type="text"] { color: var(--pl-type-text); border-color: var(--pl-type-text); }
 .pl-badge[data-type="rich_text"] { color: var(--pl-type-rich_text); border-color: var(--pl-type-rich_text); }
 .pl-badge[data-type="image"] { color: var(--pl-type-image); border-color: var(--pl-type-image); }
@@ -863,7 +774,6 @@ body.pl-browser #root {
   flex-shrink: 0;
 }
 
-/* 置顶按钮同时带 pl-icon-btn 和 pl-pin 时，强调色优先于 pl-icon-btn 的灰色 */
 .pl-icon-btn.pl-pin {
   color: var(--pl-accent);
 }
@@ -895,7 +805,6 @@ body.pl-browser #root {
   color: var(--pl-accent);
 }
 
-/* 面板钉住桌面：高亮强调色，表示当前处于「常驻」态 */
 .pl-panel-pin.is-pinned {
   color: var(--pl-accent);
 }
@@ -903,8 +812,6 @@ body.pl-browser #root {
 .pl-icon-btn.is-danger:hover {
   color: var(--pl-danger);
 }
-
-/* ---------- 文件 chip ---------- */
 
 .pl-chips {
   display: flex;
@@ -929,8 +836,6 @@ body.pl-browser #root {
   color: var(--pl-text-tertiary);
 }
 
-/* ---------- 颜色块 ---------- */
-
 .pl-swatch {
   width: 16px;
   height: 16px;
@@ -944,8 +849,6 @@ body.pl-browser #root {
   height: 96px;
   border-radius: 0;
 }
-
-/* ---------- 预览区 ---------- */
 
 .pl-preview__meta {
   font-size: 11px;
@@ -983,11 +886,9 @@ body.pl-browser #root {
   border-radius: 0;
   border: 2px solid var(--pl-border);
   background: var(--pl-bg-subtle);
-  /* 像素主题：缩略图/预览图保持近邻放大的锐利感 */
   image-rendering: pixelated;
 }
 
-/* F20 代码预览：等宽 + 简易着色。颜色只出现在代码 token 里，界面本身不去彩度。 */
 .pl-code {
   font-family: var(--pl-font-mono);
   font-size: 12px;
@@ -1022,8 +923,6 @@ body.pl-browser #root {
   gap: 8px;
 }
 
-/* 站点标识位。底色与文字色由 JS 按域名算出来（见 lib/site.ts），
-   这里只给形状与排版 —— 真实 favicon 需要联网，与「零网络请求」冲突。 */
 .pl-link-preview__favicon {
   width: 22px;
   height: 22px;
@@ -1066,8 +965,6 @@ body.pl-browser #root {
   line-height: 2;
 }
 
-/* ---------- F19 编辑面板 ---------- */
-
 .pl-edit {
   display: flex;
   flex-direction: column;
@@ -1103,8 +1000,6 @@ body.pl-browser #root {
   flex-shrink: 0;
 }
 
-/* ---------- 状态栏 ---------- */
-
 .pl-status {
   display: flex;
   align-items: center;
@@ -1124,8 +1019,6 @@ body.pl-browser #root {
 .pl-status__spacer {
   margin-left: auto;
 }
-
-/* ---------- 空状态 ---------- */
 
 .pl-empty {
   height: 100%;
@@ -1147,8 +1040,6 @@ body.pl-browser #root {
   font-size: 11px;
   color: var(--pl-text-tertiary);
 }
-
-/* ---------- 滚动条 ---------- */
 
 .pl-list::-webkit-scrollbar,
 .pl-preview::-webkit-scrollbar,

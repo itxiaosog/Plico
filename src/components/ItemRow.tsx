@@ -11,23 +11,16 @@ import { CheckIcon, PinIcon, TrashIcon, TypeIcon } from "./TypeIcon";
 interface Props {
   item: Item;
   selected: boolean;
-  /** F16：这条在多选集合里，且集合长度 > 1。 */
   multiSelected?: boolean;
   query: string;
   onSelect: () => void;
-  /** F16：Ctrl / Cmd 点击，加入或移出多选。 */
   onToggleMulti?: () => void;
-  /** F16：Shift 点击，从锚点连选到这一条。 */
   onRangeSelect?: () => void;
-  /** F16：可拖到分组上归类。 */
   draggable?: boolean;
   onPin: () => void;
   onDelete: () => void;
-  /** 右键菜单「粘贴为纯文本」。文本类条目才显示这个入口。 */
   onPastePlain?: () => void;
-  /** F20：右键「复制 Markdown 链接」。仅链接条目传入。 */
   onCopyMarkdown?: () => void;
-  /** F17：右键给条目添加一个标签。 */
   onAddTag?: () => void;
   onAssignGroup?: () => void;
 }
@@ -44,7 +37,6 @@ function Highlighted({ text, query }: { text: string; query: string }) {
 
 const CHIP_LIMIT = 2;
 
-/** 图片条目的缩略图。Tauri 下走 asset 协议；mock 环境或路径缺失时退化为占位块。 */
 function Thumb({ item }: { item: Item }) {
   const src = imageUrl(item.thumb_path ?? item.image_path);
   if (!src) {
@@ -59,7 +51,7 @@ export function ItemRow({ item, selected, multiSelected = false, query, onSelect
   const isImage = item.type === "image";
   const isFiles = item.type === "files";
   const isColor = item.type === "color";
-  const isTextual = !isImage && !isFiles; // 能走「纯文本粘贴」的类型
+  const isTextual = !isImage && !isFiles;
   const isTall = isImage || isFiles;
 
   const color = isColor ? cssColor(item.content ?? item.plain_text ?? "") : null;
@@ -78,11 +70,6 @@ export function ItemRow({ item, selected, multiSelected = false, query, onSelect
       className={`pl-row${isTall ? " is-tall" : ""}${selected ? " is-selected" : ""}${multiSelected ? " is-multi" : ""}`}
       data-id={item.id}
       draggable={draggable}
-      // 用 mousedown + preventDefault：既完成选中，又不把焦点从搜索框抢走，
-      // 这样点完条目还能继续用键盘操作。
-      //
-      // Shift / Ctrl 的判断必须在 `onSelect` 之前 —— 它们是「扩选」，不是
-      // 「改成只选这一条」，落到 onSelect 就把刚攒起来的多选冲掉了。
       onMouseDown={(e) => {
         e.preventDefault();
         if (e.shiftKey && onRangeSelect) {
@@ -95,8 +82,6 @@ export function ItemRow({ item, selected, multiSelected = false, query, onSelect
         }
         onSelect();
       }}
-      // 右键出上下文菜单（F15 的「粘贴为纯文本」入口）。选中态不变 ——
-      // 右键是作用于「这一行」，不是把选中项挪过去。
       onContextMenu={(e) => {
         e.preventDefault();
         setMenu({ x: e.clientX, y: e.clientY });
@@ -139,8 +124,7 @@ export function ItemRow({ item, selected, multiSelected = false, query, onSelect
 
       {item.pinned ? (
         <>
-          {/* 置顶项常驻显示一个可点击的图钉按钮：点击即取消置顶（toggle）。
-              保留强调色让用户一眼看出这条是置顶的，hover 时旁边再出删除按钮。 */}
+
           <button
             type="button"
             className="pl-icon-btn pl-pin"
@@ -212,7 +196,6 @@ export function ItemRow({ item, selected, multiSelected = false, query, onSelect
   );
 }
 
-/** 右键上下文菜单。目前只有「粘贴为纯文本」一个动作，后续 F19 编辑也挂这里。 */
 function ItemContextMenu({
   pos,
   isTextual,
@@ -230,7 +213,6 @@ function ItemContextMenu({
   onAddTag?: () => void;
   onAssignGroup?: () => void;
 }) {
-  // 点击别处收起菜单
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
       if (!(e.target as HTMLElement).closest(".pl-context-menu")) onClose();

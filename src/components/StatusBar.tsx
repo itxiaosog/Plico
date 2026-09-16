@@ -9,12 +9,8 @@ export function StatusBar() {
   const pinned = useClipboardStore((s) => s.stats.pinned);
   const error = useClipboardStore((s) => s.error);
   const editing = useClipboardStore((s) => s.editingId !== null);
-  // 批量选择时 Delete 的语义变成「删一组」，提示文案要跟着变，
-  // 否则用户以为只会删光标那一条。
   const multi = useClipboardStore((s) => s.selectedIds.length > 1);
 
-  // 面板「钉住桌面」状态：会话级，不持久化。
-  // 启动时读一次初始值（正常是 false），之后只靠点击切换。
   const [panelPinned, setPanelPinned] = useState(false);
   useEffect(() => {
     void isPanelPinned().then(setPanelPinned).catch(() => {});
@@ -23,7 +19,6 @@ export function StatusBar() {
     try {
       setPanelPinned(await togglePanelPin());
     } catch {
-      // mock 环境不会有，真机出问题最多是钉不住，不报错
     }
   };
 
@@ -35,7 +30,6 @@ export function StatusBar() {
     );
   }
 
-  // F19 编辑态下的状态栏换成编辑器的快捷键提示
   if (editing) {
     return (
       <div className="pl-status">
@@ -60,7 +54,7 @@ export function StatusBar() {
         {total} {t("unitItems")}
         {pinned > 0 ? ` · ${pinned} ${t("statusPin")}` : ""}
       </span>
-      {/* 钉住桌面：点击切换。钉住时按钮高亮（强调色），表示当前处于「常驻」态。 */}
+
       <button
         type="button"
         className={`pl-icon-btn pl-panel-pin${panelPinned ? " is-pinned" : ""}`}

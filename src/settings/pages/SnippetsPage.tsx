@@ -52,9 +52,6 @@ export function SnippetsPage() {
   });
   const paste = (s: Snippet) => run(async () => {
     if (isTauri) await getCurrentWindow().hide();
-    // 必须走 paste_text_with_cursor 而不是 paste_text —— 后者不解析
-    // `{{cursor}}`，会把它原样粘到目标窗口里。试粘的意义就是复现真实粘贴，
-    // 包括占位符与光标落点。
     try { await pasteSnippet(s.content); }
     catch (e) {
       if (isTauri) {

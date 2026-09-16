@@ -1,11 +1,4 @@
-/* Plico 设计 token —— 单一像素主题（pxlkit 改版，主题切换已移除）。
-
-   调色板与 @pxlkit/ui-kit 的 --retro-* 默认值同源：我们自己的组件
-   直接别名到库的变量上，保证「库组件」与「自制组件」出自同一块调色板。
-   要整体换配色只改这个文件。 */
-
 :root {
-  /* ===== pxlkit retro 调色板（pixel 基线，与库默认值一致）===== */
   --retro-bg: #f2f0eb;
   --retro-surface: #e6e2dc;
   --retro-card: #dcd8d0;
@@ -24,16 +17,13 @@
   --retro-purple: #8237c8;
   --retro-pink: #c84678;
 
-  /* ===== 面板 token：全部别名到 retro 调色板 ===== */
   --pl-bg-canvas: var(--retro-bg);
   --pl-bg-surface: var(--retro-bg);
   --pl-bg-preview: var(--retro-surface);
   --pl-bg-subtle: var(--retro-card);
-  /* 选中态：主色淡底 + 行内左色条（色条在 app.css 的 box-shadow 里） */
   --pl-bg-selected: rgba(79, 70, 229, 0.14);
   --pl-bg-accent-soft: rgba(79, 70, 229, 0.1);
 
-  /* ===== 类型色：每种条目类型一个 retro 色调，用在徽标和筛选按钮上 ===== */
   --pl-type-text: var(--retro-cyan);
   --pl-type-rich_text: var(--retro-purple);
   --pl-type-image: var(--retro-green);
@@ -41,7 +31,6 @@
   --pl-type-link: var(--retro-primary);
   --pl-type-color: var(--retro-pink);
 
-  /* 像素风的描边要「看得见」：控件边框用 strong，分区细线用普通 */
   --pl-border: var(--retro-border-strong);
   --pl-divider: var(--retro-border);
 
@@ -54,11 +43,9 @@
   --pl-accent-text: var(--retro-primary);
   --pl-danger: var(--retro-red);
 
-  /* 像素硬阴影：不糊、只平移 */
   --pl-shadow-panel: 4px 4px 0 rgba(26, 26, 46, 0.22);
   --pl-shadow-pop: 3px 3px 0 rgba(26, 26, 46, 0.2);
 
-  /* 分组色标（F16）：8 个区分度大的 retro 色 */
   --pl-group-mint: var(--retro-green);
   --pl-group-sky: var(--retro-cyan);
   --pl-group-indigo: var(--retro-primary);
@@ -68,14 +55,10 @@
   --pl-group-moss: var(--retro-green-hover);
   --pl-group-graphite: var(--retro-muted);
 
-  /* ===== 字体 =====
-     全局像素字体：Fusion Pixel 同时覆盖 CJK 与拉丁，密度高的列表文字也能读；
-     PS2P 只覆盖拉丁区，留给标题/品牌位（街机味更足，正文用它读不动）。 */
   --pl-font-sans: "Fusion Pixel", "Microsoft YaHei", "PingFang SC", sans-serif;
   --pl-font-display: "PS2P", "Fusion Pixel", sans-serif;
   --pl-font-mono: "Fusion Pixel", Consolas, "Courier New", monospace;
 
-  /* ===== 形状：像素风一律直角 ===== */
   --pl-radius-panel: 0;
   --pl-radius-item: 0;
   --pl-radius-pill: 0;

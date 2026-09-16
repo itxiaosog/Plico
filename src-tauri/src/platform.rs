@@ -1,6 +1,3 @@
-//! 平台相关的薄封装。所有 unsafe 都关在这个文件里，上层拿到的都是安全接口。
-
-/// 剪贴板序号。Windows 上每次剪贴板内容变化都会自增，比对比内容更快也更省。
 #[cfg(windows)]
 pub fn clipboard_sequence() -> u32 {
     unsafe { windows_sys::Win32::System::DataExchange::GetClipboardSequenceNumber() }
@@ -11,8 +8,6 @@ pub fn clipboard_sequence() -> u32 {
     0
 }
 
-/// 当前前台窗口的 (可执行文件名, 窗口标题)。用于 F1 的来源记录。
-/// 任何一步失败都返回 None —— 来源信息是锦上添花，不该影响入库。
 #[cfg(windows)]
 pub fn foreground_app() -> (Option<String>, Option<String>) {
     use windows_sys::Win32::Foundation::CloseHandle;
@@ -29,7 +24,6 @@ pub fn foreground_app() -> (Option<String>, Option<String>) {
             return (None, None);
         }
 
-        // 窗口标题
         let title = {
             let len = GetWindowTextLengthW(hwnd);
             if len > 0 {
@@ -45,7 +39,6 @@ pub fn foreground_app() -> (Option<String>, Option<String>) {
             }
         };
 
-        // 进程名
         let mut pid: u32 = 0;
         GetWindowThreadProcessId(hwnd, &mut pid);
         if pid == 0 {

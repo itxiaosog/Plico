@@ -1,9 +1,3 @@
-/* Plico 设置窗口（F22）—— 单一像素主题。
-   颜色一律走 tokens.css 的 CSS 变量（即 pxlkit 的 --retro-* 调色板）。 */
-
-/* ---------- 浏览器预览：模拟真实窗口尺寸 ---------- */
-
-/* 棋盘格「桌面」底色统一在 app.css 的 pl-browser/pl-browser-set 规则里 */
 body.pl-browser-set {
   padding: 28px;
   overflow: auto;
@@ -18,8 +12,6 @@ body.pl-browser-set #root {
   overflow: hidden;
   box-shadow: var(--pl-shadow-panel);
 }
-
-/* ---------- 外壳 ---------- */
 
 .pl-set {
   height: 100%;
@@ -80,14 +72,12 @@ body.pl-browser-set #root {
   color: var(--pl-text-primary);
 }
 
-/* 像素选中态：主色实底 + 硬投影，一眼看出当前在哪页 */
 .pl-set__tab.is-active {
   background: var(--retro-primary);
   color: #fff;
   box-shadow: 2px 2px 0 rgba(26, 26, 46, 0.25);
 }
 
-/* 非激活态的图标按页着色，让导航一眼能区分 */
 .pl-set__tab[data-page="general"] svg { color: var(--retro-primary); }
 .pl-set__tab[data-page="hotkey"] svg { color: var(--retro-gold); }
 .pl-set__tab[data-page="storage"] svg { color: var(--retro-cyan); }
@@ -97,7 +87,6 @@ body.pl-browser-set #root {
 .pl-set__tab[data-page="tags"] svg { color: var(--retro-red); }
 .pl-set__tab[data-page="about"] svg { color: var(--retro-muted); }
 
-/* 激活态时图标变白色（在彩色底上） */
 .pl-set__tab.is-active svg { color: #fff; }
 
 .pl-set__main {
@@ -131,7 +120,6 @@ body.pl-browser-set #root {
 .pl-set-snippet-form { padding: 0 14px 14px; }
 .pl-set-snippet-form fieldset { display: grid; gap: 9px; border: 0; padding: 0; }
 .pl-set-snippet-form textarea { resize: vertical; }
-
 
 .pl-set-section {
   margin-bottom: 22px;
@@ -198,8 +186,6 @@ body.pl-browser-set #root {
   color: var(--pl-text-secondary);
 }
 
-/* ---------- 说明块 ---------- */
-
 .pl-set-note {
   padding: 11px 14px;
   font-size: 12px;
@@ -227,8 +213,6 @@ body.pl-browser-set #root {
   font-size: 11px;
 }
 
-/* ---------- 快捷键 ---------- */
-
 .pl-set-hotkey {
   display: flex;
   align-items: center;
@@ -253,8 +237,6 @@ body.pl-browser-set #root {
   border-color: var(--pl-accent);
   color: var(--pl-accent-text);
 }
-
-/* ---------- 规则列表 ---------- */
 
 .pl-set-rules {
   padding: 4px 0;
@@ -319,8 +301,6 @@ body.pl-browser-set #root {
   min-width: 0;
 }
 
-/* ---------- 标签管理（F17）---------- */
-
 .pl-set-tags {
   padding: 4px 0;
 }
@@ -381,8 +361,6 @@ body.pl-browser-set #root {
   color: var(--pl-text-tertiary);
 }
 
-/* ---------- 提示条 ---------- */
-
 .pl-set-warn {
   padding: 9px 14px;
   border-top: 1px solid var(--pl-divider);
@@ -420,8 +398,6 @@ body.pl-browser-set #root {
   color: inherit;
   cursor: pointer;
 }
-
-/* ---------- 滚动条 ---------- */
 
 .pl-set__scroll::-webkit-scrollbar,
 .pl-set__nav::-webkit-scrollbar {

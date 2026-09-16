@@ -1,15 +1,5 @@
-/**
- * 界面文案表。
- *
- * 每条 key 一份 zh / en。`t(key)` 只做查表，不做插值 —— 需要拼参数的地方
- * 在调用处拼（比如 `${n} 条`），文案保持纯字符串，省掉一套模板语法。
- *
- * 加新文案时：往这里加一条 key，然后 `t("yourKey")`。找不到 key 时会返回 key
- * 本身并在控制台留一条警告 —— 文案缺失在预览里一眼能看出来，不该静默成空白。
- */
 import { initialLang, type Lang } from "./lang";
 
-/** 当前生效语言。由 `useLangSync` 在设置加载后更新；首屏前先取 `initialLang()`。 */
 let current: Lang = initialLang();
 
 export function setLang(lang: Lang): void {
@@ -17,7 +7,6 @@ export function setLang(lang: Lang): void {
 }
 
 const TABLE = {
-  // ---------- 面板 ----------
   searchPlaceholder: { zh: "搜索历史…", en: "Search history…" },
   filterAll: { zh: "全部", en: "All" },
   filterText: { zh: "文本", en: "Text" },
@@ -99,7 +88,6 @@ const TABLE = {
   typeColor: { zh: "颜色", en: "Color" },
   unknownSource: { zh: "未知来源", en: "Unknown source" },
 
-  // ---------- 设置窗口 ----------
   navGeneral: { zh: "通用", en: "General" },
   navHotkey: { zh: "快捷键", en: "Hotkey" },
   navStorage: { zh: "存储", en: "Storage" },
@@ -150,7 +138,6 @@ const TABLE = {
   snippetsPasted: { zh: "已发送粘贴请求", en: "Paste requested" },
   snippetsPasteHint: { zh: "粘贴到唤起面板前的应用。浏览器预览仅模拟粘贴。", en: "Paste into the app active before opening the panel. Browser preview only simulates paste." },
   snippetsShortcutHint: { zh: "填了快捷键的片段会注册成全局热键，在任意应用里按下即可粘贴。与面板热键、其它片段冲突时会拒绝保存。", en: "A snippet with a shortcut is registered as a global hotkey — press it in any app to paste. Conflicting with the panel hotkey or another snippet is rejected." },
-  // 通用页
 
   sectionLanguage: { zh: "语言", en: "Language" },
   languageLabel: { zh: "界面语言", en: "Language" },
@@ -162,7 +149,6 @@ const TABLE = {
   autostartLabel: { zh: "开机自启", en: "Launch at login" },
   autostartHint: { zh: "登录 Windows 后自动运行，默认关闭", en: "Run automatically at login; off by default" },
 
-  // 快捷键页
   hotkeySection: { zh: "唤起面板", en: "Show panel" },
   hotkeyLabel: { zh: "全局快捷键", en: "Global shortcut" },
   hotkeyHint: { zh: "在任何应用里按下都能唤出 Plico 面板", en: "Brings up the Plico panel from any app" },
@@ -177,7 +163,6 @@ const TABLE = {
   hotkeyNeedModifier: { zh: "至少要带一个修饰键（Ctrl / Alt / Shift / Win）", en: "Needs at least one modifier (Ctrl / Alt / Shift / Win)" },
   hotkeyTaken: { zh: "这个组合注册不上，可能已被其它程序占用", en: "That combo can't be registered — probably taken by another app" },
 
-  // 存储页
   storageSection: { zh: "容量", en: "Capacity" },
   maxItemsLabel: { zh: "最大条目数", en: "Max items" },
   maxItemsHint: { zh: "超出后删除最旧的未置顶条目；置顶条目永不因容量被删", en: "Oldest unpinned items are removed past this; pinned items are never evicted" },
@@ -197,7 +182,6 @@ const TABLE = {
   unitDays: { zh: "天", en: "days" },
   unitMs: { zh: "毫秒", en: "ms" },
 
-  // 隐私页
   privacyAppTitle: { zh: "应用排除", en: "Excluded apps" },
   privacyAppNote: { zh: "这些应用在前台时，复制的内容不会被记录。填进程名即可，带不带 .exe 都行，大小写不敏感。", en: "When these apps are in the foreground, copied content is not recorded. Process name only — .exe optional, case-insensitive." },
   privacyContentTitle: { zh: "内容规则", en: "Content rules" },
@@ -211,7 +195,6 @@ const TABLE = {
   privacyContentAdd: { zh: "添加规则", en: "Add rule" },
   privacyContentEmpty: { zh: "还没有内容规则", en: "No content rules yet" },
 
-  // 行为页
   behaviorSection: { zh: "面板显示", en: "Panel" },
   positionLabel: { zh: "面板位置", en: "Position" },
   positionHint: { zh: "跟随光标：出现在鼠标所在屏幕的中上方", en: "Cursor: centered near the top of the screen under the mouse" },
@@ -230,7 +213,6 @@ const TABLE = {
   behaviorKeys1: { zh: "面板快捷键：↑ ↓ 或 Ctrl+P / Ctrl+N 移动选中，Enter 粘贴，P 置顶，Delete 删除，Tab 切筛选，Esc 关闭。", en: "Panel keys: ↑ ↓ or Ctrl+P / Ctrl+N to move, Enter to paste, P to pin, Delete to remove, Tab to cycle filter, Esc to close." },
   behaviorKeys2: { zh: "搜索框里已经有内容时，单键快捷键（P / J / K）让位给输入。", en: "When the search box has content, single-key shortcuts (P / J / K) yield to typing." },
 
-  // 关于页
   aboutVersion: { zh: "版本", en: "Version" },
   aboutTagline: { zh: "本地优先的剪贴板历史管理器", en: "Local-first clipboard history manager" },
   aboutPrivacy: { zh: "所有数据只存在本机，不联网、不上传、不遥测。面板快捷键唤出，方向键选择，回车粘贴。", en: "All data stays on this machine. No network, no upload, no telemetry." },
@@ -241,10 +223,6 @@ const TABLE = {
 
 export type MsgKey = keyof typeof TABLE;
 
-/**
- * 取一条文案。`lang` 为 undefined 时用 `?lang=` / 本地缓存 / 系统语言兜底，
- * 和主题层「首屏用缓存、加载完覆盖」是同一个节奏。
- */
 export function t(key: MsgKey, lang?: Lang): string {
   const entry = TABLE[key];
   if (!entry) {

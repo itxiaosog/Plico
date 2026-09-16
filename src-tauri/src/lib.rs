@@ -22,26 +22,15 @@ use crate::clipboard::monitor::{self, Suppress};
 use crate::settings::AppSettings;
 use crate::storage::db::Db;
 
-/// 全局状态。db / suppress / settings 都用 Arc 共享给监听线程。
-///
-/// `settings` 用 `RwLock` 而不是把值复制进监听线程：设置改完要**立刻**影响
-/// 监听行为（比如刚加了一条隐私规则），复制一份就再也同步不上了。
 pub struct AppState {
     pub db: Arc<Db>,
     pub suppress: Arc<Suppress>,
     pub settings: Arc<RwLock<AppSettings>>,
-    /// 面板「钉住桌面」状态（会话级，不持久化）。钉住时失焦不自动隐藏。
     pub panel_pinned: AtomicBool,
-    /// 数据目录（安装目录下的 `data/`，或回退的 `%APPDATA%`）。
-    ///
-    /// 启动时解析一次存下来：进程生命周期内它不会变，而解析过程带一次写探针，
-    /// 不该每次存图片都做一遍。
     pub data_dir: PathBuf,
 }
 
 impl AppState {
-    /// 读一份设置快照。锁中毒时取内层值继续用 —— 中毒只意味着某个写者 panic 过，
-    /// 值本身仍是完整的（写者总是整份替换）。
     pub fn settings(&self) -> AppSettings {
         self.settings
             .read()
@@ -56,19 +45,16 @@ impl AppState {
 
 pub fn run() {
     tauri::Builder::default()
-        // 单实例必须在最前面注册：剪贴板工具跑两份会互相抢剪贴板（F11）
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             panel::show_panel(app);
         }))
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, shortcut, event| {
-                    // 只响应按下，否则一次按键会触发 Press + Release 两次切换
                     hotkey::dispatch(app, shortcut, event.state());
                 })
                 .build(),
         )
-        // F11 开机自启
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
             None,
@@ -118,18 +104,12 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
 
-            // 数据目录：安装目录下的 `data/`（装到 Program Files 之类不可写的
-            // 位置时自动回退到 `%APPDATA%/com.plico.app/`，见 data_dir::resolve）。
             let data_dir = data_dir::resolve(&handle)?;
             std::fs::create_dir_all(&data_dir)?;
 
-            // 1.x 的数据在 `%APPDATA%/com.plico.app/`，升级到新版本要搬过来。
-            // migrate 是幂等的：目标已有库就不搬，旧目录原样保留当备份。
             if let Ok(legacy) = data_dir::legacy_dir(&handle) {
                 if legacy != data_dir {
                     if let Err(e) = data_dir::migrate(&legacy, &data_dir) {
-                        // 搬失败不改路径 —— 新目录能用就继续用，旧数据留在原地，
-                        // 用户下次启动会再试一遍
                         eprintln!("[plico] 旧数据搬迁失败：{e}");
                     }
                 }
@@ -142,11 +122,8 @@ pub fn run() {
             reconcile_autostart(&handle, &db, &mut settings);
             register_hotkey(&handle, &db, &mut settings);
             register_plain_hotkey(&handle, &settings);
-            // F18：片段热键必须排在面板 / 纯文本之后 —— sync 要靠这两个键判断撞车，
-            // 顺序反了会把片段键注册到主热键头上。
             sync_snippet_hotkeys(&handle, &db, &settings);
 
-            // 保留策略清理：启动时先扫一遍（F14）。之后由监听线程每 6 小时跑一次。
             match db.purge_expired(settings.retention_days, monitor::now_ms()) {
                 Ok(0) => {}
                 Ok(n) => println!("[plico] 启动清理：删除 {n} 条过期记录"),
@@ -163,7 +140,6 @@ pub fn run() {
             });
 
             tray::build(&handle)?;
-            // 预览区折叠状态会影响窗口最小宽度，启动时先对齐一次
             let collapsed = handle.state::<AppState>().settings().preview_collapsed;
             panel::apply_min_size(&handle, collapsed);
             monitor::spawn(handle.clone(), db, suppress, settings);
@@ -175,7 +151,6 @@ pub fn run() {
             WindowEvent::Focused(false) => panel::handle_focus_lost(window.clone()),
             WindowEvent::CloseRequested { api, .. } => {
                 if window.label() == settings_window::SETTINGS_LABEL {
-                    // 设置窗口关掉只是收起来，下次打开不用重建 webview
                     api.prevent_close();
                     settings_window::hide(window);
                 }
@@ -186,13 +161,6 @@ pub fn run() {
         .expect("Plico 启动失败");
 }
 
-/// 注册全局热键，注册不上就回退到默认值。
-///
-/// **注册失败不阻断启动** —— 最坏情况只是没有全局唤起，托盘还在，
-/// 为了一个热键让整个剪贴板工具起不来是不划算的。
-///
-/// 回退只处理**唤起面板**这一条；纯文本热键注册失败只是功能缺失，
-/// 不值得为它回退到默认值（那反而会让两个热键撞在一起）。
 fn register_hotkey(app: &AppHandle, db: &Db, settings: &mut AppSettings) {
     if hotkey::register(app, &settings.hotkey).is_ok() {
         return;
@@ -221,17 +189,12 @@ fn register_hotkey(app: &AppHandle, db: &Db, settings: &mut AppSettings) {
     }
 }
 
-/// 注册「粘贴为纯文本」全局热键（F15）。失败只记日志，不回退默认值。
 fn register_plain_hotkey(app: &AppHandle, settings: &AppSettings) {
     if let Err(e) = hotkey::register(app, &settings.plain_hotkey) {
         eprintln!("[plico] 纯文本热键注册失败：{e}（不影响面板唤起）");
     }
 }
 
-/// 注册所有片段快捷键（F18）。
-///
-/// 启动时直接走 `hotkey::sync_snippets` 而不是 `sync_snippets_from_db`：
-/// 此刻 `AppState` 还没 `manage` 进去，拿不到 `state.db`。
 fn sync_snippet_hotkeys(app: &AppHandle, db: &Db, settings: &AppSettings) {
     let snippets = match db.list_snippets() {
         Ok(v) => v,
@@ -246,13 +209,6 @@ fn sync_snippet_hotkeys(app: &AppHandle, db: &Db, settings: &AppSettings) {
     }
 }
 
-/// 开机自启以**系统实际状态**为准回写一次。
-///
-/// 用户可能在任务管理器里手动关掉过，那样设置页会显示「已开启」而实际没开。
-///
-/// 只在 release 构建里做这件事：debug 构建（`tauri dev`）跑的是另一个 exe 路径，
-/// 插件的 `is_enabled` 会如实报告「没为这个 exe 注册过」，把用户为正式版设的开
-/// 关改掉。开发期不该有这种副作用。
 fn reconcile_autostart(app: &AppHandle, db: &Db, settings: &mut AppSettings) {
     if cfg!(debug_assertions) {
         return;

@@ -1,12 +1,3 @@
-/**
- * 极简易的代码着色（F20）。
- *
- * 不是真的语法高亮 —— 没有 parser，只是把常见 token 包一层颜色。
- * 分词按「字符串 / 注释 / 数字 / 关键字 / 其他」四类扫一遍，
- * 输出段序列给 React 渲染。命中关键字时颜色走 `--pl-accent`，
- * 其余走三级灰度文字，与「颜色只出现在内容里」的视觉原则一致。
- */
-
 export type TokenKind = "str" | "comment" | "num" | "kw" | "plain";
 
 export interface Token {
@@ -15,7 +6,6 @@ export interface Token {
 }
 
 const KEYWORDS = new Set([
-  // 多语言公共
   "if", "else", "for", "while", "return", "break", "continue", "switch", "case", "default",
   "try", "catch", "finally", "throw", "throws", "new", "delete", "typeof", "instanceof",
   "class", "extends", "interface", "implements", "public", "private", "protected", "static",
@@ -28,7 +18,6 @@ const KEYWORDS = new Set([
   "match", "where", "dyn", "unsafe", "extern", "move", "loop", "Some", "Ok", "Err",
   // Python
   "def", "lambda", "pass", "elif", "with", "raise", "assert", "global", "nonlocal", "del",
-  // SQL（大写）
   "SELECT", "INSERT", "UPDATE", "DELETE", "FROM", "WHERE", "JOIN", "LEFT", "RIGHT", "INNER",
   "OUTER", "ON", "GROUP", "BY", "ORDER", "HAVING", "LIMIT", "OFFSET", "AS", "DISTINCT", "UNION",
   "CREATE", "TABLE", "DROP", "ALTER", "INDEX", "PRIMARY", "KEY", "NOT", "NULL", "DEFAULT",
@@ -56,7 +45,6 @@ export function tokenize(code: string, lang?: string | null): Token[] {
     const c = code[i]!;
     const rest = code.slice(i);
 
-    // 行注释 // 和 #
     if (rest.startsWith("//") || (c === "#" && !rest.startsWith("#!"))) {
       const end = code.indexOf("\n", i);
       flush();
@@ -66,7 +54,6 @@ export function tokenize(code: string, lang?: string | null): Token[] {
       continue;
     }
 
-    // 块注释 /* */
     if (rest.startsWith("/*")) {
       flush();
       const end = code.indexOf("*/", i + 2);
@@ -76,7 +63,6 @@ export function tokenize(code: string, lang?: string | null): Token[] {
       continue;
     }
 
-    // 字符串（含转义），" ' ` 都算
     if (c === '"' || c === "'" || c === "`") {
       flush();
       let j = i + 1;
@@ -90,7 +76,6 @@ export function tokenize(code: string, lang?: string | null): Token[] {
       continue;
     }
 
-    // 数字（整数/浮点/0x/0b/科学计数）
     if (/[0-9]/.test(c) && (i === 0 || !/[A-Za-z_$]/.test(code[i - 1]!))) {
       const m = rest.match(/^(0x[0-9a-fA-F]+|0b[01]+|[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)/);
       if (m) {
@@ -101,7 +86,6 @@ export function tokenize(code: string, lang?: string | null): Token[] {
       }
     }
 
-    // 标识符：往关键字表里查
     if (/[A-Za-z_$]/.test(c)) {
       const m = rest.match(/^[A-Za-z_$][A-Za-z0-9_$]*/);
       if (m) {

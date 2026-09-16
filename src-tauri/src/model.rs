@@ -1,6 +1,5 @@
 use serde::{Deserialize, Serialize};
 
-/// 条目类型。对应规格书 items.type 列的取值域。
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ItemType {
@@ -37,7 +36,6 @@ impl ItemType {
     }
 }
 
-/// 落库后的完整条目。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Item {
     pub id: i64,
@@ -58,7 +56,6 @@ pub struct Item {
     pub last_used_at: Option<i64>,
 }
 
-/// 待入库的新条目。hash 由调用方按 F2 规则算好后传入。
 #[derive(Debug, Clone, Default)]
 pub struct NewItem {
     pub kind: ItemType,
@@ -80,11 +77,6 @@ impl Default for ItemType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Tag { pub id: i64, pub name: String }
 
-/// 标签 + 使用计数。
-///
-/// 设置窗口的标签页需要知道「这个标签被多少条记录用着」—— 决定合并还是删除时
-/// 这是必要信息，否则用户只能盲操作。单独开一个结构而不是给 `Tag` 加字段：
-/// `Tag` 还用在条目行内展示上，那里不需要计数，加了会平白多一次 JOIN。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TagStat { pub id: i64, pub name: String, pub count: i64 }
 
@@ -93,7 +85,6 @@ pub struct Snippet { pub id:i64, pub title:String, pub content:String, pub tags:
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewSnippet { pub title: String, pub content: String, pub tags: Option<String>, pub shortcut: Option<String> }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Stats {

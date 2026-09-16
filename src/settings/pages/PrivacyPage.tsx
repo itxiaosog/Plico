@@ -85,7 +85,6 @@ function RuleList({
     setBusy(true);
     void onAdd(kind, value).then((ok) => {
       setBusy(false);
-      // 失败时保留输入，用户改一改正则就能重试
       if (ok) setDraft("");
     });
   };

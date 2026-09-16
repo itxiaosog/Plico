@@ -6,12 +6,6 @@ import { Button, NumberField, Row, Section } from "../controls";
 import { useSettingsStore } from "../useSettingsStore";
 import type { Stats } from "../../types";
 
-/**
- * 存储页。
- *
- * 这里只有「容量」和「清理」两组数字 —— 数据目录固定在安装目录下的 `data/`，
- * 不提供修改入口，所以没有「数据」那一栏（要看路径去关于页）。
- */
 export function StoragePage() {
   const settings = useSettingsStore((s) => s.settings);
   const patch = useSettingsStore((s) => s.patch);

@@ -2,7 +2,6 @@ import { colorFormats } from "./color";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
-/** 列表里用的短时间：今天只显示 HH:MM，昨天及更早显示 M/D。 */
 export function formatListTime(epochMs: number): string {
   const d = new Date(epochMs);
   const now = new Date();
@@ -18,7 +17,6 @@ export function formatListTime(epochMs: number): string {
   return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
-/** 预览区用的完整时间。 */
 export function formatFullTime(epochMs: number): string {
   const d = new Date(epochMs);
   return (
@@ -27,14 +25,12 @@ export function formatFullTime(epochMs: number): string {
   );
 }
 
-/** 摘要：压掉换行与连续空白，避免列表行被撑成多行。 */
 export function summarize(text: string | null, max = 200): string {
   if (!text) return "";
   const flat = text.replace(/\s+/g, " ").trim();
   return flat.length > max ? `${flat.slice(0, max)}…` : flat;
 }
 
-/** 文件名列表 → 展示用的 chip 数据。 */
 export function parseFileList(content: string | null): string[] {
   if (!content) return [];
   const trimmed = content.trim();
@@ -45,13 +41,11 @@ export function parseFileList(content: string | null): string[] {
         return parsed.filter((v): v is string => typeof v === "string");
       }
     } catch {
-      // 不是 JSON 就按分隔符切
     }
   }
   return trimmed.split(/\r?\n|\s*\|\s*/).filter(Boolean);
 }
 
-/** 从完整路径里取出文件名。 */
 export function baseName(path: string): string {
   const parts = path.split(/[\\/]/);
   return parts[parts.length - 1] || path;

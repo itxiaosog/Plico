@@ -6,15 +6,6 @@ import { t } from "../../lib/i18n";
 import type { TagStat } from "../../types";
 import { Button, ErrorBanner, Section } from "../controls";
 
-/**
- * 标签管理页（F17）。
- *
- * 三个写操作都返回变更后的**完整统计列表**，直接覆盖本地状态 —— 标签页是
- * 「一屏看全」的形态，前端自己打补丁反而容易和后端不一致。
- *
- * 同一时刻只允许一行处于「正在改」的状态（重命名 / 合并 / 删除确认互斥）：
- * 否则用户点开两行会看到两个输入框，分不清哪个提交的是哪个。
- */
 export function TagsPage() {
   const [stats, setStats] = useState<TagStat[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,7 +28,6 @@ export function TagsPage() {
     return () => { active = false; };
   }, []);
 
-  /** 所有写操作共用的壳：统一管 busy / 报错 / 成功提示 / 收起展开面板。 */
   const run = (action: () => Promise<TagStat[]>, done: string) => {
     if (busy) return;
     setBusy(true);
@@ -55,7 +45,6 @@ export function TagsPage() {
       .finally(() => setBusy(false));
   };
 
-  /** 三个「展开某一行」的入口都顺手收起其他行，保证一次只开一个面板。 */
   const open = (which: "rename" | "merge" | "delete", tag: TagStat) => {
     setRenaming(which === "rename" ? tag.id : null);
     setMerging(which === "merge" ? tag.id : null);
@@ -67,7 +56,6 @@ export function TagsPage() {
 
   const submitRename = (tag: TagStat) => {
     const name = renameDraft.trim();
-    // 没改或者清空了就直接收起，不必往后端跑一趟
     if (!name || name === tag.name) { setRenaming(null); return; }
     run(() => renameTag(tag.id, name), t("tagsRenamed"));
   };

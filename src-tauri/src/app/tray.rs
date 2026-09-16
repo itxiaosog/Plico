@@ -8,7 +8,6 @@ use crate::clipboard::monitor::EVENT_ITEMS_CHANGED;
 use crate::error::{Error, Result};
 use crate::AppState;
 
-/// 系统托盘（F11）。左键单击唤起面板，右键出菜单。
 pub fn build(app: &AppHandle) -> Result<()> {
     let open = MenuItem::with_id(app, "open", "打开面板", true, None::<&str>)?;
     let settings_item = MenuItem::with_id(app, "settings", "设置…", true, None::<&str>)?;
@@ -27,7 +26,6 @@ pub fn build(app: &AppHandle) -> Result<()> {
         .icon(icon)
         .tooltip("Plico · 剪贴板历史")
         .menu(&menu)
-        // 左键留给「唤起面板」，菜单只在右键弹出
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "open" => panel::show_panel(app),
@@ -37,7 +35,6 @@ pub fn build(app: &AppHandle) -> Result<()> {
                 }
             }
             "clear" => {
-                // 默认保留置顶条目（F9）
                 match app.state::<AppState>().db.clear(true) {
                     Ok(n) => {
                         println!("[plico] 已清空 {n} 条历史（保留置顶）");

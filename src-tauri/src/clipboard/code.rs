@@ -1,36 +1,13 @@
-//! F20 代码语言识别。
-//!
-//! 用途只有一个：决定预览区要不要把这段文本按等宽 + 关键字高亮展示。
-//! 判据的标准因此是「宁可返回 None，也不要判错」—— 把一封邮件渲染成代码
-//! 比不渲染更糟。不进库、不参与去重。
-//!
-//! 三层判据，从强到弱：
-//!   1. **结构性**：合法 JSON / shebang / 成片的 HTML 标签。命中即定性。
-//!   2. **代码骨架上的加权关键词**：先把注释和字符串剥掉，再统计关键词。
-//!      不剥的话，`// 这里要 import 一个 type` 这种中文注释正好含有关键词。
-//!   3. **门槛**：太短或只有一行的文本直接放弃。
-
-/// 一门语言的判据。
 struct Profile {
     lang: &'static str,
-    /// 关键词表是否按小写匹配 —— SQL 里 `select` 和 `SELECT` 一样常见。
     ci: bool,
-    /// `(信号串, 权重)`。权重表达「这门语言有多独占这个串」。
     signals: &'static [(&'static str, u32)],
 }
 
-/// 低于这个分数不认。定成 3 是因为单条高权重信号（`impl `、`console.log`）
-/// 就足够定性，而两三条低权重信号（`::` + `use `）凑起来也算数。
 const MIN_SCORE: u32 = 3;
 
-/// 单行文本的门槛。一行散文里偶尔也会撞上一两个关键词（"export the data
-/// from the table"），所以单行要拿到更高的分数才认 —— 多行本身是代码的强信号，
-/// 散文很少有多行结构。一条 `SELECT ... WHERE ... ORDER BY ...` 能到 15 分，
-/// 一句英文句子通常到不了 8 分。
 const SINGLE_LINE_MIN_SCORE: u32 = 8;
 
-/// 最短长度。比 1.0 的 40 字符宽松：关键词现在带权重，`impl ` + `let mut `
-/// 两条就能定性，没必要再凑长度。但下限仍然要有 —— 一个 `if x` 不该被当代码。
 const MIN_CHARS: usize = 30;
 
 pub fn detect(text: &str) -> Option<&'static str> {
@@ -47,7 +24,6 @@ pub fn detect(text: &str) -> Option<&'static str> {
         return None;
     }
 
-    // 关键词只在骨架上匹配：注释和字符串里的词不算数
     let skeleton = strip_comments_and_strings(raw);
     let lowered = skeleton.to_lowercase();
     let threshold = if raw.lines().count() >= 2 {
@@ -68,7 +44,6 @@ pub fn detect(text: &str) -> Option<&'static str> {
         if score < threshold {
             continue;
         }
-        // 同分时保留先出现的（PROFILES 的顺序即优先级），保证结果稳定
         if best.is_none_or(|(_, s)| score > s) {
             best = Some((p.lang, score));
         }
@@ -76,9 +51,7 @@ pub fn detect(text: &str) -> Option<&'static str> {
     best.map(|(lang, _)| lang)
 }
 
-/// 结构性信号：命中一条就能定语言，不必凑关键词。
 fn structural(raw: &str) -> Option<&'static str> {
-    // shebang —— 几乎是唯一解
     if let Some(first) = raw.lines().next() {
         if first.starts_with("#!") {
             return Some("shell");
@@ -87,15 +60,10 @@ fn structural(raw: &str) -> Option<&'static str> {
 
     let first_char = raw.chars().next()?;
 
-    // 合法 JSON 只可能长这样：以 `{` / `[` 开头，且整体能被解析。
-    // 这一条是判定性的 —— `{"a":1}` 只有 7 个字符也该被认出来，
-    // 不该卡在 MIN_CHARS 上。
     if matches!(first_char, '{' | '[') && serde_json::from_str::<serde_json::Value>(raw).is_ok() {
         return Some("json");
     }
 
-    // 成片的 HTML 标签。门槛是「≥3 个 `<` 且有闭合标签」：
-    // 单独一个 `<` 可能是比较运算符或 C++ 模板参数，凑不满这个数。
     if first_char == '<' {
         let opens = raw.matches('<').count();
         if opens >= 3 && (raw.contains("</") || raw.contains("/>")) {
@@ -106,11 +74,6 @@ fn structural(raw: &str) -> Option<&'static str> {
     None
 }
 
-/// 剥掉注释与字符串字面量，留下「代码骨架」。
-///
-/// 刻意**不**处理单引号：Rust 的 `&'a str` 生命周期、Python 英文撇号（`don't`）
-/// 都会被误当成字符串开头，一剥就吃掉半段真代码。而单引号字符串里含有关键词的
-/// 概率很低 —— 这个取舍换来的是「绝不剥错」。
 fn strip_comments_and_strings(src: &str) -> String {
     #[derive(PartialEq)]
     enum State {
@@ -143,11 +106,6 @@ fn strip_comments_and_strings(src: &str) -> String {
                     continue;
                 }
                 if c == '#' {
-                    // `#[` 是 Rust 属性、`#!` 是 shebang、`#include` 一类是 C 预处理
-                    // 指令 —— 三者都不是注释，先排除掉。
-                    //
-                    // 剩下的还要再判一次位置：只有「这一行到目前全是空白」的 `#`
-                    // 才是注释，否则 CSS 的 `#id` 选择器会被吃掉。
                     let tail: String = chars[i + 1..].iter().take(8).collect();
                     let is_directive = tail.starts_with('[')
                         || tail.starts_with('!')
@@ -202,8 +160,6 @@ fn strip_comments_and_strings(src: &str) -> String {
                     i += 2;
                     continue;
                 }
-                // 换行说明这个引号根本没闭合（单引号没处理，`'` 开头的行很常见），
-                // 认输回到代码态，别把后面整段都吃掉
                 if c == '\n' {
                     state = State::Code;
                     out.push('\n');
@@ -217,7 +173,6 @@ fn strip_comments_and_strings(src: &str) -> String {
                     i += 2;
                     continue;
                 }
-                // 模板串可以跨行，换行不算认输
                 if c == '\n' {
                     out.push('\n');
                 } else if c == '`' {
@@ -231,11 +186,6 @@ fn strip_comments_and_strings(src: &str) -> String {
     out
 }
 
-/// 关键词表。顺序即优先级（同分时靠前的胜出）。
-///
-/// TypeScript 只收**独占**信号：`const` / `=>` / `import` 这些 JS 也有的
-/// 放在 javascript 里。否则一段普通 JS 会被判成 TS（TS 是 JS 的超集，
-/// 反过来放就会这样）。真含类型标注的 TS 靠 `: string` 这类信号胜出。
 const PROFILES: &[Profile] = &[
     Profile {
         lang: "rust",
@@ -431,7 +381,6 @@ mod tests {
 
     #[test]
     fn 识别_rust_带生命周期() {
-        // 单引号不该被当成字符串开头，否则 `&'a str` 会把后面整段吃掉
         let code = "pub fn parse<'a>(input: &'a str) -> &'a str {\n    let s = input.trim();\n    s\n}";
         assert_eq!(detect(code), Some("rust"));
     }
@@ -448,7 +397,6 @@ mod tests {
         assert_eq!(detect(code), Some("typescript"));
     }
 
-    /// TS 是 JS 的超集。没有类型标注的 JS 不该被判成 TS。
     #[test]
     fn 识别_javascript() {
         let code = "const add = (a, b) => a + b;\nconsole.log(add(1, 2));\nmodule.exports = { add };";
@@ -479,7 +427,6 @@ mod tests {
         assert_eq!(detect(code), Some("shell"));
     }
 
-    /// 一条合法 JSON 只有 7 个字符，不该卡在长度门槛上。
     #[test]
     fn 合法_json_不看长度() {
         assert_eq!(detect("{\"a\": 1}"), Some("json"));
@@ -504,14 +451,12 @@ mod tests {
         assert_eq!(detect("https://a.com"), None);
     }
 
-    /// 单行 SQL 是剪贴板里最常见的一类代码，不能因为「只有一行」就漏掉。
     #[test]
     fn 单行_sql_也能识别() {
         let code = "SELECT id, \"type\", plain_text FROM items WHERE pinned = 1 ORDER BY last_copied_at DESC LIMIT 50;";
         assert_eq!(detect(code), Some("sql"));
     }
 
-    /// 反过来，一行英文散文里的零散关键词不该凑够单行门槛。
     #[test]
     fn 单行英文散文不算代码() {
         let prose = "Please export the data from the table and import it into the new system before Friday.";
@@ -524,14 +469,12 @@ mod tests {
         assert_eq!(detect(mail), None);
     }
 
-    /// 注释里的关键词不该把散文判成代码 —— 这是 1.0 最容易误报的场景。
     #[test]
     fn 注释里的关键词不算数() {
         let prose = "会议纪要：\n// 需要 import 一个 type 并 export interface\n// 再定义一个 function 和 const\n请张三确认。";
         assert_eq!(detect(prose), None);
     }
 
-    /// 字符串里的关键词同理。
     #[test]
     fn 字符串里的关键词不算数() {
         let text = "错误提示原文如下：\n\"Cannot find interface User, did you forget to import it? Please check your const declaration.\"\n请联系后端同学。";
@@ -549,10 +492,8 @@ mod tests {
 
     #[test]
     fn 井号注释只在行首生效() {
-        // Rust 属性不该被当成注释吃掉
         let s = strip_comments_and_strings("#[derive(Debug)]\nstruct A;");
         assert!(s.contains("#[derive(Debug)]"));
-        // 行首的井号才是注释
         let s2 = strip_comments_and_strings("x = 1\n# 这是注释\nimport os");
         assert!(!s2.contains("这是注释"));
         assert!(s2.contains("import os"));

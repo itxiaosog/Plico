@@ -12,11 +12,8 @@ const SELECT_COLUMNS: &str = r#"
     created_at, last_copied_at, last_used_at
 "#;
 
-/// 全文索引的版本。改了索引结构 / 分词器就 +1，启动时会自动重建一次。
 const FTS_VERSION: &str = "1";
 
-/// trigram 分词器至少要 3 个字符才能匹配。短于这个长度的查询（中文里两个字
-/// 的词非常常见，比如「预算」）走 `LIKE` 回退 —— 宁可慢一点，也不能搜不到。
 const FTS_MIN_CHARS: usize = 3;
 
 pub struct Db {
@@ -43,7 +40,6 @@ impl Db {
 
     fn connect(db_path: &Path) -> Result<Self> {
         let conn = Connection::open(db_path)?;
-        // WAL + 单写连接；写操作通过 Mutex 串行化（R7 的对策）
         conn.execute_batch(
             "PRAGMA journal_mode = WAL;
              PRAGMA synchronous = NORMAL;
@@ -58,12 +54,6 @@ impl Db {
         Ok(db)
     }
 
-    /// 取数据库连接锁。
-    ///
-    /// 用 `unwrap_or_else(|e| e.into_inner())` 而不是 `unwrap()`：锁中毒只意味着
-    /// 某个持有者 panic 过，SQLite 连接本身仍然可用（未提交的事务在 Drop 时已经
-    /// 回滚）。如果这里直接 panic，监督线程重启后第一件事又是 panic，规格书
-    /// 第 7 节的「崩溃自恢复」就永远起不来。
     fn conn(&self) -> std::sync::MutexGuard<'_, Connection> {
         self.conn.lock().unwrap_or_else(|e| e.into_inner())
     }
@@ -76,13 +66,6 @@ impl Db {
         Ok(())
     }
 
-    /// 建立 / 校验全文索引（F22）。
-    ///
-    /// 分两步：`SCHEMA` 里已经 `CREATE VIRTUAL TABLE IF NOT EXISTS` 并挂好了
-    /// 同步触发器，所以**新建的库**从第一条记录起索引就是准的。但**老库**升级
-    /// 上来时 `items` 里已经有数据、触发器又只覆盖之后的写入，必须全量 `rebuild`
-    /// 一次。用 `schema_meta` 记一个版本号把它限定成「只做一次」——
-    /// 每次启动都重建在万条量级上虽然也就几十毫秒，但那是白花的。
     fn ensure_fts(&self) -> Result<()> {
         let conn = self.conn();
         let done: Option<String> = conn
@@ -105,13 +88,6 @@ impl Db {
         Ok(())
     }
 
-    /// 插入或合并。返回 (条目, 是否命中重复)。
-    ///
-    /// 命中重复时：更新 `last_copied_at`、补齐来源信息，条目自然排到顶部（列表按
-    /// `pinned DESC, last_copied_at DESC` 排序）。对应 F2。
-    ///
-    /// `max_items` 由调用方从设置里取（F14），不在这里读库，避免每来一条记录
-    /// 就多查一次设置表。
     pub fn upsert(&self, new: &NewItem, hash: &str, now: i64, max_items: i64) -> Result<(Item, bool)> {
         let existing_id: Option<i64> = {
             let conn = self.conn();
@@ -165,7 +141,6 @@ impl Db {
             .get_by_hash(hash)?
             .ok_or_else(|| Error::Other("插入后未能读回条目".into()))?;
 
-        // 容量策略：超出上限时淘汰最旧的未置顶条目
         self.enforce_capacity(max_items)?;
 
         Ok((item, false))
@@ -193,17 +168,10 @@ impl Db {
             .optional()?)
     }
 
-    /// monitor 在「命中去重就不落盘」的快路径上需要按哈希查一下存在性。
-    /// 单独开一个 `pub(crate)` 出口，免得为这一处把 `get_by_hash` 整个公开。
     pub(crate) fn get_by_hash_pub(&self, hash: &str) -> Result<Option<Item>> {
         self.get_by_hash(hash)
     }
 
-    /// 删除条目并把它引用的图片文件一起清掉（F9/F12/F14）。
-    ///
-    /// 图片文件按哈希命名，不同条目不可能共享同一张图（同哈希就合并成一条了），
-    /// 所以删文件是安全的。文件删失败不阻塞删库记录 —— 孤儿文件比「想删删不掉」
-    /// 好收拾得多。
     pub fn delete_with_files(&self, id: i64) -> Result<()> {
         let item = self.get(id)?;
         self.delete(id)?;
@@ -211,7 +179,6 @@ impl Db {
         Ok(())
     }
 
-    /// 列表查询。`query` 走 LIKE 子串匹配（F6，大小写不敏感由 SQLite 的 LIKE 默认行为保证）。
     pub fn list(
         &self,
         query: Option<&str>,
@@ -221,7 +188,6 @@ impl Db {
         let q = query.map(str::trim).filter(|s| !s.is_empty());
         let (tag_query, text_query) = q.map(parse_tag_query).unwrap_or((None, None));
         let like = text_query.as_ref().map(|s| format!("%{}%", escape_like(s)));
-        // 够长就走 FTS5，短查询走 LIKE（trigram 匹配不了少于 3 个字符的模式）
         let fts = text_query
             .as_ref()
             .filter(|s| s.chars().count() >= FTS_MIN_CHARS)
@@ -276,7 +242,6 @@ impl Db {
         Ok(())
     }
 
-    /// 置顶 / 取消置顶，返回更新后的条目。
     pub fn toggle_pin(&self, id: i64) -> Result<Item> {
         {
             let conn = self.conn();
@@ -291,7 +256,6 @@ impl Db {
         self.get(id)
     }
 
-    /// 清空历史。`keep_pinned = true` 时保留置顶条目（F9 的默认行为）。
     pub fn clear(&self, keep_pinned: bool) -> Result<usize> {
         let conn = self.conn();
         let n = if keep_pinned {
@@ -319,14 +283,9 @@ impl Db {
         Ok(Stats { total, pinned })
     }
 
-    /// 图片配额（F14）：`images/` 下文件总大小超过 `quota_mb` 时，
-    /// 删除最旧的未置顶图片条目直到回到配额内。返回删除条数。
-    ///
-    /// 策略与 `enforce_capacity` 一致：只动 `pinned = 0` 的，置顶永不因配额被删。
     pub fn purge_images(&self, quota_mb: i64) -> Result<usize> {
         let quota_bytes = quota_mb * 1024 * 1024;
 
-        // 先查出所有未置顶的图片条目（含各自的原图路径），按时间从新到旧
         let items = {
             let conn = self.conn();
             let mut stmt = conn.prepare(
@@ -348,7 +307,6 @@ impl Db {
             out
         };
 
-        // 从头往后累计，遇到累计量超过配额的条目就删
         let mut used: i64 = 0;
         let mut removed = 0usize;
         for (id, image_path, thumb_path) in items {
@@ -368,10 +326,6 @@ impl Db {
         Ok(removed)
     }
 
-    /// 容量策略（F14）：超出上限时删除最旧的未置顶条目。置顶条目永不因容量被删。
-    ///
-    /// 注意这里只删库记录 —— 条目引用的图片文件由 `purge_images` 在下一轮清理里
-    /// 处理，容量淘汰路径上不值得为文件删除再加一次磁盘 IO。
     fn enforce_capacity(&self, max_items: i64) -> Result<()> {
         let conn = self.conn();
         conn.execute(
@@ -388,8 +342,6 @@ impl Db {
         Ok(())
     }
 
-    /// 保留策略（F14）：删除超过 `retention_days` 天的未置顶条目。返回删除条数。
-    /// 置顶条目同样不受影响。
     pub fn purge_expired(&self, retention_days: i64, now: i64) -> Result<usize> {
         let cutoff = now - retention_days * 24 * 60 * 60 * 1000;
         let conn = self.conn();
@@ -426,10 +378,6 @@ impl Db {
 
     pub fn delete_snippet(&self, id:i64) -> Result<()> { let conn=self.conn(); let n=conn.execute("DELETE FROM snippets WHERE id=?1",[id])?; if n==0 { return Err(Error::NotFound(id)); } Ok(()) }
 
-
-
-    /// 读全部设置行。这里只负责搬运 key-value，解析交给 `settings` 模块，
-    /// 免得两处都懂「设置长什么样」。
     pub fn all_settings(&self) -> Result<Vec<(String, String)>> {
         let conn = self.conn();
         let mut stmt = conn.prepare("SELECT key, value FROM settings")?;
@@ -442,7 +390,6 @@ impl Db {
         Ok(out)
     }
 
-    /// 批量 upsert 设置。整份设置是一个事务，避免改到一半留个半成品状态。
     pub fn put_settings(&self, pairs: &[(String, String)]) -> Result<()> {
         let mut conn = self.conn();
         let tx = conn.transaction()?;
@@ -459,11 +406,6 @@ impl Db {
         Ok(())
     }
 
-    /// 分组列表，按用户排定的顺序（F16）。
-    ///
-    /// **`ORDER BY sort_order, name` 里的 `name` 只是平手时的兜底**，不是主要依据：
-    /// `sort_order` 理论上唯一，但老库（`sort_order` 全是默认 0 的那批）和并发写入
-    /// 都可能产生并列，加一个确定性次级键能让结果稳定，不会每次查询顺序都在跳。
     pub fn list_groups(&self) -> Result<Vec<crate::model::Group>> {
         let conn = self.conn();
         let mut stmt = conn.prepare("SELECT id, name, color, sort_order FROM groups ORDER BY sort_order, name")?;
@@ -471,15 +413,6 @@ impl Db {
         rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
     }
 
-    /// 建分组（F16）。
-    ///
-    /// `color` 允许为空 —— 「石墨」是默认色，用户不选就是它。
-    /// 撞名**报错而不是静默返回已有分组**：用户以为新建了一个，实际上
-    /// 在往另一个分组里塞条目，这种失败很难自己发现。与 `rename_tag` 同一立场。
-    ///
-    /// **`sort_order` 必须显式取 `MAX + 1`**：建表时它是 `DEFAULT 0`，而排序读的是
-    /// `ORDER BY sort_order, name` —— 全写 0 的话顺序实际退化成按名称字母序，
-    /// 「新建的分组排在末尾」这条就不成立了（会插到字母序该在的位置去）。
     pub fn create_group(&self, name: &str, color: Option<&str>) -> Result<crate::model::Group> {
         let name = name.trim();
         if name.is_empty() { return Err(Error::Other("分组名称不能为空".into())); }
@@ -497,10 +430,6 @@ impl Db {
         self.list_groups()?.into_iter().find(|g| g.name == name).ok_or_else(|| Error::Other("创建分组失败".into()))
     }
 
-    /// 改名 / 改色（F16）。`color` 传 `None` 表示不动颜色。
-    ///
-    /// `color` 与 `name` 分成两个参数而不是塞一个 struct：重命名对话框只想改名字，
-    /// 不该被迫把当前色值原样回传一遍（那样前端得先读一次颜色，多一次往返）。
     pub fn rename_group(&self, id: i64, name: &str, color: Option<&str>) -> Result<()> {
         let name = name.trim();
         if name.is_empty() { return Err(Error::Other("分组名称不能为空".into())); }
@@ -517,7 +446,6 @@ impl Db {
         Ok(())
     }
 
-    /// 分组名是否已被占用。`except` 用于重命名时排除自己。
     fn group_name_taken(&self, name: &str, except: Option<i64>) -> Result<bool> {        let conn = self.conn();
         let hit: Option<i64> = conn
             .query_row(
@@ -529,16 +457,6 @@ impl Db {
         Ok(matches!(hit, Some(id) if Some(id) != except))
     }
 
-    /// 按传入顺序重写分组的 `sort_order`（F16 排序 UI）。
-    ///
-    /// 收的是**完整 id 顺序**（不是「把 X 上移一位」这种增量指令）：拖动/上下移
-    /// 之后前端手里就是一份完整列表，整份提交最省事，也不会出现「同一秒两个增量
-    /// 指令互相抵消」的问题。`sort_order` 重写成 `0..n-1`，顺带把老库那批全是 0 的
-    /// 纪录扶正。
-    ///
-    /// **校验 id 集合必须与库中完全一致**：前端可能拿着一份过期的列表（别的窗口
-    /// 刚建/删过分组）。若只按传入的 id 更新，没被提到的分组会保留旧的 `sort_order`，
-    /// 与新的 0..n 撞在一起 —— 表现为「排完序顺序还是乱的」，很难查。宁可报错让前端重取。
     pub fn reorder_groups(&self, ids: &[i64]) -> Result<()> {
         let mut conn = self.conn();
         let tx = conn.transaction()?;
@@ -550,7 +468,6 @@ impl Db {
         };
 
         let incoming: std::collections::HashSet<i64> = ids.iter().copied().collect();
-        // 重复 id 会让后面按 index 写 sort_order 时产生并列值，也要挡住
         if incoming.len() != ids.len() {
             return Err(Error::Other("分组顺序里有重复项".into()));
         }
@@ -565,10 +482,6 @@ impl Db {
         Ok(())
     }
 
-    /// 删分组。条目**回到未分组**，不跟着一起消失（F16 验收标准）。
-    ///
-    /// 两条语句包在一个事务里：否则「删了分组但条目还挂着已消失的 group_id」
-    /// 这种中间态一旦被并发读到，过滤视图里那些条目会直接看不见。
     pub fn delete_group(&self, id: i64) -> Result<()> {
         let mut conn = self.conn();
         let tx = conn.transaction()?;
@@ -594,7 +507,6 @@ impl Db {
     pub fn remove_item_tag(&self,item_id:i64,name:&str)->Result<Vec<crate::model::Tag>> { let c=self.conn(); c.execute("DELETE FROM item_tags WHERE item_id=?1 AND tag_id=(SELECT id FROM tags WHERE name=?2)",rusqlite::params![item_id,name.trim()])?; drop(c); self.item_tags(item_id) }
     pub fn item_tags(&self,item_id:i64)->Result<Vec<crate::model::Tag>> { let c=self.conn(); let mut s=c.prepare("SELECT t.id,t.name FROM tags t JOIN item_tags it ON it.tag_id=t.id WHERE it.item_id=?1 ORDER BY t.name")?; let rows=s.query_map([item_id],|r|Ok(crate::model::Tag{id:r.get(0)?,name:r.get(1)?}))?; let out=rows.collect::<rusqlite::Result<Vec<_>>>()?; Ok(out) }
 
-    /// 标签 + 使用计数，按名称排序。
     pub fn list_tag_stats(&self) -> Result<Vec<crate::model::TagStat>> {
         let conn = self.conn();
         let mut stmt = conn.prepare(
@@ -609,10 +521,6 @@ impl Db {
         Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
     }
 
-    /// 重命名标签。
-    ///
-    /// 目标名已被别的标签占用时**报错而不是静默合并** —— 合并会丢掉一个标签，
-    /// 是破坏性操作，必须由用户显式选择走 `merge_tags`。
     pub fn rename_tag(&self, id: i64, name: &str) -> Result<()> {
         let name = name.trim();
         if name.is_empty() { return Err(Error::Other("标签名不能为空".into())); }
@@ -629,10 +537,6 @@ impl Db {
         Ok(())
     }
 
-    /// 把 `from` 合并进 `to`：条目归属整体搬迁，然后删掉 `from`。
-    ///
-    /// `INSERT OR IGNORE` 是必需的 —— 同一条记录可能同时挂着两个标签，
-    /// 直接 INSERT 会撞 `item_tags` 的联合主键。
     pub fn merge_tags(&self, from: i64, to: i64) -> Result<()> {
         if from == to { return Ok(()); }
         let mut c = self.conn();
@@ -647,13 +551,11 @@ impl Db {
             "INSERT OR IGNORE INTO item_tags(item_id, tag_id) SELECT item_id, ?2 FROM item_tags WHERE tag_id = ?1",
             rusqlite::params![from, to],
         )?;
-        // 删 tags 行时外键 CASCADE 会清掉 from 残留的 item_tags（连接已开 foreign_keys）
         tx.execute("DELETE FROM tags WHERE id = ?1", [from])?;
         tx.commit()?;
         Ok(())
     }
 
-    /// 删除标签。条目本身不受影响，只是不再带这个标签。
     pub fn delete_tag(&self, id: i64) -> Result<()> {
         let conn = self.conn();
         if conn.execute("DELETE FROM tags WHERE id = ?1", [id])? == 0 {
@@ -661,7 +563,6 @@ impl Db {
         }
         Ok(())
     }
-
 
     pub fn list_rules(&self) -> Result<Vec<Rule>> {
         let conn = self.conn();
@@ -682,7 +583,6 @@ impl Db {
         Ok(out)
     }
 
-    /// 只取启用的规则。监听线程走这条，省掉一次过滤。
     pub fn enabled_rules(&self) -> Result<Vec<Rule>> {
         Ok(self
             .list_rules()?
@@ -705,7 +605,6 @@ impl Db {
             )?;
         }
 
-        // 读回刚插入的那条，把自增 id 带回去给前端
         self.list_rules()?
             .into_iter()
             .filter(|r| r.kind == kind && r.value == value)
@@ -772,26 +671,16 @@ fn parse_tag_query(query: &str) -> (Option<String>, Option<String>) {
     }
     (None, Some(query.to_string()))
 }
-/// 转义 LIKE 的通配符，避免用户输入的 `%` / `_` 被当成模式。
 fn escape_like(s: &str) -> String {
     s.replace('\\', "\\\\")
         .replace('%', "\\%")
         .replace('_', "\\_")
 }
 
-/// 把用户输入包成 FTS5 的**带引号短语**，这样整个串按字面匹配。
-///
-/// 必须包引号：FTS5 的 MATCH 语法里 `AND` / `OR` / `NOT` / `*` / `^` / `-`
-/// 都是操作符，用户搜 `foo -bar` 或 `a AND b` 会直接语法错误。
-/// 引号内部的 `"` 按 FTS5 的规矩用两个 `"` 转义。
 fn fts_phrase(s: &str) -> String {
     format!("\"{}\"", s.replace('"', "\"\""))
 }
 
-/// 把打不开的数据库文件挪到一边。返回实际使用的备份路径（挪不动就返回 None）。
-///
-/// 用改名而不是删除：万一还能人工抢救出内容，直接删掉就一点机会都没有了。
-/// WAL / SHM 必须一起挪走 —— 残留的 `-wal` 会让新建的空库读到旧事务。
 fn quarantine(db_path: &Path) -> Option<std::path::PathBuf> {
     if !db_path.exists() {
         return None;
@@ -819,15 +708,12 @@ fn quarantine(db_path: &Path) -> Option<std::path::PathBuf> {
     Some(backup)
 }
 
-/// `plico.db` + `-wal` → `plico.db-wal`。
-/// 不能用 `with_extension`，那会把 `.db` 整个换掉。
 fn append_suffix(path: &Path, suffix: &str) -> std::path::PathBuf {
     let mut s = path.as_os_str().to_os_string();
     s.push(suffix);
     std::path::PathBuf::from(s)
 }
 
-/// 删除条目引用的图片文件（原图 + 缩略图）。删不掉只记日志，不阻塞调用方。
 fn remove_image_files(item: &Item) {
     remove_image_files_raw(item.image_path.as_deref(), item.thumb_path.as_deref());
 }
@@ -835,7 +721,6 @@ fn remove_image_files(item: &Item) {
 fn remove_image_files_raw(image_path: Option<&str>, thumb_path: Option<&str>) {
     for path in [image_path, thumb_path].into_iter().flatten() {
         if let Err(e) = std::fs::remove_file(path) {
-            // 文件可能已经被手动删了，不存在不算错误
             if e.kind() != std::io::ErrorKind::NotFound {
                 eprintln!("[plico] 删除图片文件失败 {path}：{e}");
             }
@@ -847,7 +732,6 @@ fn remove_image_files_raw(image_path: Option<&str>, thumb_path: Option<&str>) {
 mod tests {
     use super::*;
 
-    /// 每个用例一个独占目录。用 pid + 纳秒，避免并行跑测试时撞车。
     fn temp_dir(tag: &str) -> std::path::PathBuf {
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -894,7 +778,6 @@ mod tests {
     #[test]
     fn 打开损坏的库会重建空库并保留原文件() {
         let dir = temp_dir("reopen");
-        // 一个头部不合法的文件，SQLite 会判定为 not a database
         std::fs::write(dir.join("plico.db"), vec![0xABu8; 4096]).unwrap();
 
         let db = Db::open(&dir).expect("应该能重建出可用的空库");
@@ -910,8 +793,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// 这条是「监听线程崩溃自恢复」能成立的前提：某个线程 panic 过之后，
-    /// 锁会中毒，但数据库本身必须还能用，否则重启后的线程立刻又死。
     #[test]
     fn 锁中毒之后数据库仍然可用() {
         let dir = temp_dir("poison");
@@ -928,9 +809,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    // ---------------- F17 标签管理 ----------------
-
-    /// 建一个文本条目，返回它的 id。标签相关的用例都从「先有东西可挂」开始。
     fn seed_item(db: &Db, text: &str) -> i64 {
         let new = NewItem {
             kind: ItemType::Text,
@@ -945,8 +823,6 @@ mod tests {
             .id
     }
 
-    /// 计数是标签页决定「合并还是删除」的依据，算错了用户就会盲操作。
-    /// 特别要守住「count = 0 的标签仍然出现在列表里」—— 否则它就没法被删掉了。
     #[test]
     fn 标签计数反映实际挂载的条目数() {
         let dir = temp_dir("tag-stat");
@@ -963,7 +839,6 @@ mod tests {
         assert_eq!(count("工作"), Some(2));
         assert_eq!(count("重要"), Some(1));
 
-        // 摘掉最后一个归属后，标签本身还在（count = 0），不能被 LEFT JOIN 吃掉
         db.assign_item_tag(a, "临时").unwrap();
         db.remove_item_tag(a, "临时").unwrap();
         let stats = db.list_tag_stats().unwrap();
@@ -976,8 +851,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// 合并的核心是「归属整体搬迁」。同时挂着两个待合并标签的条目是最容易出问题
-    /// 的情况：直接 INSERT 会撞 `item_tags` 的联合主键，必须 `INSERT OR IGNORE`。
     #[test]
     fn 合并标签会把条目归属整体搬迁() {
         let dir = temp_dir("tag-merge");
@@ -999,15 +872,12 @@ mod tests {
         assert!(stats.iter().all(|s| s.name != "旧"), "被合并掉的标签应该消失");
         assert_eq!(stats.iter().find(|s| s.name == "新").unwrap().count, 2);
 
-        // b 本来就挂着「新」，搬迁时那一行要被 IGNORE 掉，不能出现重复归属
         assert_eq!(db.item_tags(b).unwrap().len(), 1);
         assert_eq!(db.item_tags(a).unwrap()[0].name, "新");
 
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// 重命名撞上已有标签时**必须报错**。若静默合并，用户会以为只是改了个名，
-    /// 实际丢了一个标签 —— 那是破坏性操作，得由用户显式走 merge。
     #[test]
     fn 重命名撞名时拒绝而不是静默合并() {
         let dir = temp_dir("tag-rename");
@@ -1030,10 +900,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    // ---------------- F16 分组 ----------------
-
-    /// 分组名撞上已有分组时必须报错。理由和标签重命名一致：静默复用会变成
-    /// 「用户以为新建了，实际在往另一个分组塞条目」，这种失败用户自己发现不了。
     #[test]
     fn 建分组撞名时拒绝() {
         let dir = temp_dir("group-dupe");
@@ -1043,14 +909,11 @@ mod tests {
         assert!(db.create_group("工作", None).is_err(), "重名必须报错");
         assert_eq!(db.list_groups().unwrap().len(), 1, "失败后不该多出分组");
 
-        // 首尾空白应该被裁掉后再比较，`"  工作  "` 也算撞名
         assert!(db.create_group("  工作  ", None).is_err(), "裁剪空白后仍算撞名");
 
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// 改名时不能被自己挡住 —— 这是 `group_name_taken` 里 `except` 参数的意义。
-    /// 只改色不改名也要走通（`color` 与 `name` 是两个独立参数）。
     #[test]
     fn 分组改名与改色互不干扰() {
         let dir = temp_dir("group-rename");
@@ -1059,28 +922,23 @@ mod tests {
         let g = db.create_group("工作", Some("--pl-group-sky")).expect("建库失败");
         assert_eq!(g.color.as_deref(), Some("--pl-group-sky"));
 
-        // 名字没变，只是改色：不能报撞名
         db.rename_group(g.id, "工作", Some("--pl-group-amber")).expect("只改色应成功");
         let after = db.list_groups().unwrap();
         assert_eq!(after[0].color.as_deref(), Some("--pl-group-amber"));
 
-        // 只改名，颜色要保持不动
         db.rename_group(g.id, "项目", None).expect("只改名应成功");
         let after = db.list_groups().unwrap();
         assert_eq!(after[0].name, "项目");
         assert_eq!(after[0].color.as_deref(), Some("--pl-group-amber"), "没传 color 时不该被清掉");
 
-        // 另一个分组撞上来仍然要拦
         db.create_group("归档", None).unwrap();
         assert!(db.rename_group(g.id, "归档", None).is_err(), "改成别人的名字必须报错");
 
-        // 空名字拒绝
         assert!(db.rename_group(g.id, "   ", None).is_err());
 
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// 删分组后条目回到未分组，而不是跟着一起消失（F16 验收标准）。
     #[test]
     fn 删分组后条目回到未分组() {
         let dir = temp_dir("group-delete");
@@ -1095,7 +953,6 @@ mod tests {
         db.delete_group(g.id).expect("删除应成功");
 
         assert!(db.list_groups().unwrap().is_empty());
-        // 条目本身还在，只是 group_id 被清空
         assert_eq!(db.list(None, None, 100).unwrap().len(), 2, "条目不该被连带删除");
         assert!(db.list(None, None, 100).unwrap().iter().all(|i| i.group_id.is_none()));
 
@@ -1104,12 +961,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// F16 排序：新建的分组必须落在末尾。
-    ///
-    /// 建表时 `sort_order` 是 `DEFAULT 0`，若 INSERT 不显式写值，全部记录都是 0，
-    /// `ORDER BY sort_order, name` 会退化成按名字字母序 —— 「新建的排在最后」这条
-    /// 就不再成立（会插到字母序该在的位置去）。这里连建三个名字**故意乱序**的
-    /// 分组，逼出这个区别。
     #[test]
     fn 新建分组排在末尾() {
         let dir = temp_dir("group-append");
@@ -1128,7 +979,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// F16 排序：整份 id 顺序提交后，列表就按新顺序读出来，且 `sort_order` 归一成 `0..n-1`。
     #[test]
     fn 重排分组后顺序生效() {
         let dir = temp_dir("group-reorder");
@@ -1145,7 +995,6 @@ mod tests {
         let orders: Vec<i64> = db.list_groups().unwrap().into_iter().map(|g| g.sort_order).collect();
         assert_eq!(orders, vec![0, 1, 2], "应重写成 0..n-1，不留空洞");
 
-        // 再排一次回到原序，结果必须稳定（幂等：同一份顺序提交两次没有额外影响）
         db.reorder_groups(&[a.id, b.id, c.id]).unwrap();
         db.reorder_groups(&[a.id, b.id, c.id]).unwrap();
         let names: Vec<String> = db.list_groups().unwrap().into_iter().map(|g| g.name).collect();
@@ -1154,11 +1003,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// F16 排序：前端拿的是过期列表时必须报错，而不是「部分更新」。
-    ///
-    /// 关键点是**集合必须完全一致**。若只按传入的 id 更新，没被提到的分组会留着
-    /// 旧的 `sort_order`，与新的 0..n 撞在一起 —— 表现为「排完序顺序还是乱的」，
-    /// 而且数据已经写坏，很难查。
     #[test]
     fn 重排分组时过期列表被拒绝() {
         let dir = temp_dir("group-reorder-stale");
@@ -1168,23 +1012,16 @@ mod tests {
         let b = db.create_group("乙", None).unwrap();
         let c = db.create_group("丙", None).unwrap();
 
-        // 少一个：别的窗口刚删了分组
         assert!(db.reorder_groups(&[a.id, b.id]).is_err(), "漏掉 id 必须报错");
-        // 多一个：别的窗口刚建了分组
         assert!(db.reorder_groups(&[a.id, b.id, c.id, 9999]).is_err(), "多出不存在的 id 必须报错");
-        // 重复 id：会让按 index 写入时产生并列值
         assert!(db.reorder_groups(&[a.id, a.id, b.id]).is_err(), "重复 id 必须报错");
 
-        // 失败后数据必须原封不动，不能留下半截写入
         let names: Vec<String> = db.list_groups().unwrap().into_iter().map(|g| g.name).collect();
         assert_eq!(names, vec!["甲", "乙", "丙"], "被拒绝的请求不该改动任何 sort_order");
 
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    // ---------------- F22 全文索引 ----------------
-
-    /// 建条目并把它的正文塞进去。`seed_item` 的文本是 content + plain_text 双写。
     fn search_ids(db: &Db, q: &str) -> Vec<i64> {
         db.list(Some(q), None, 100).unwrap().into_iter().map(|i| i.id).collect()
     }
@@ -1204,8 +1041,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// 删掉条目后索引必须跟着删 —— 外部内容表不会自动同步，
-    /// 漏了 DELETE 触发器就会搜出已经不在的条目。
     #[test]
     fn 删除条目后索引不再命中() {
         let dir = temp_dir("fts-del");
@@ -1219,7 +1054,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// 清空历史（批量 DELETE）也要同步。
     #[test]
     fn 清空历史后索引不再命中() {
         let dir = temp_dir("fts-clear");
@@ -1233,14 +1067,12 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// 老库升级：`items` 里已有数据、触发器还没建。重建一次之后必须能搜到。
     #[test]
     fn 老库重建索引后能搜到已有条目() {
         let dir = temp_dir("fts-rebuild");
         let db = Db::open(&dir).expect("建库失败");
         let a = seed_item(&db, "升级前就存在的记录，关键词是琥珀色犀牛");
 
-        // 模拟「索引没建过」：清掉版本标记 + 清空索引，再跑一次 ensure_fts
         {
             let conn = db.conn();
             conn.execute("DELETE FROM schema_meta WHERE key = 'fts_version'", []).unwrap();
@@ -1254,7 +1086,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// 重建是幂等的，而且第二次会被版本号挡住（不重复做无用功）。
     #[test]
     fn 重建索引幂等() {
         let dir = temp_dir("fts-idem");
@@ -1266,7 +1097,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// 用户在搜索框里敲的可能是 FTS5 的语法字符。不包成短语就会直接语法报错。
     #[test]
     fn 查询里的_fts_语法字符不会炸() {
         let dir = temp_dir("fts-syntax");
@@ -1274,14 +1104,12 @@ mod tests {
         seed_item(&db, "一条普通记录，用于确认特殊字符不会让查询失败");
 
         for q in ["a AND b", "foo -bar", "x*", "\"引号\"", "^start", "NOT thing", "a:b"] {
-            // 只要不返回 Err 就算过 —— 搜不到是正常结果
             let _ = db.list(Some(q), None, 10).expect("特殊字符不该让查询失败");
         }
 
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// 搜索要同时覆盖来源应用名（老行为），FTS 索引里也带了这两列。
     #[test]
     fn 全文索引覆盖来源应用名() {
         let dir = temp_dir("fts-source");
@@ -1307,8 +1135,6 @@ mod tests {
         assert_eq!(fts_phrase("say \"hi\""), "\"say \"\"hi\"\"\"");
     }
 
-    /// 搜索框是大小写不敏感的，而且两条路径（长查询走 FTS、短查询走 LIKE）
-    /// 必须给出一致的答案 —— 否则用户会看到「多打一个字结果就变了」。
     #[test]
     fn 搜索大小写不敏感且两条路径一致() {
         let dir = temp_dir("fts-case");
@@ -1322,10 +1148,8 @@ mod tests {
         let hash = crate::storage::normalize::hash_text("Plico Release Notes");
         let id = db.upsert(&new, &hash, 1_000, 1_000).unwrap().0.id;
 
-        // 2 字符 → LIKE 回退
         assert_eq!(search_ids(&db, "re"), vec![id]);
         assert_eq!(search_ids(&db, "RE"), vec![id]);
-        // 5 字符 → FTS5
         assert_eq!(search_ids(&db, "release"), vec![id]);
         assert_eq!(search_ids(&db, "RELEASE"), vec![id]);
         assert_eq!(search_ids(&db, "release notes"), vec![id], "跨词的空格短语也要命中");
@@ -1345,7 +1169,6 @@ mod tests {
         db.delete_tag(id).expect("删除应该成功");
         assert!(db.list_tag_stats().unwrap().is_empty());
         assert!(db.item_tags(a).unwrap().is_empty(), "外键 CASCADE 应该清掉关联行");
-        // 条目本身还在 —— 删标签不该顺手把内容也带走
         assert_eq!(db.get(a).expect("条目应该还在").id, a);
 
         assert!(db.delete_tag(id).is_err(), "删不存在的标签要报错而不是静默成功");
@@ -1421,16 +1244,6 @@ CREATE TABLE IF NOT EXISTS schema_meta (
   value TEXT
 );
 
--- ---------- F22 全文索引 ----------
---
--- 用 `trigram` 而不是默认的 `unicode61`：默认分词器会把一整串中文当成一个
--- token，`剪贴板历史` 只能整串命中，搜「历史」找不到。trigram 按三字符切片，
--- 天然支持子串匹配，中文英文一视同仁（代价是模式必须 ≥3 字符，短查询由
--- `list` 里的 LIKE 回退兜住）。
---
--- `content='items'` 是「外部内容表」：索引本身不存原文，只存切片，原文始终
--- 以 items 为准。这样能省一份存储，代价是增删改必须由触发器同步 ——
--- 少了触发器索引就会悄悄变旧，而且是「搜不到」这种不报错的坏法。
 CREATE VIRTUAL TABLE IF NOT EXISTS items_fts USING fts5(
   plain_text, content, source_app, source_title,
   content='items',
@@ -1443,7 +1256,6 @@ CREATE TRIGGER IF NOT EXISTS items_fts_ai AFTER INSERT ON items BEGIN
   VALUES (new.id, new.plain_text, new.content, new.source_app, new.source_title);
 END;
 
--- 外部内容表的删除要把**旧值**喂给 'delete' 命令，索引才知道该摘掉哪些切片
 CREATE TRIGGER IF NOT EXISTS items_fts_ad AFTER DELETE ON items BEGIN
   INSERT INTO items_fts(items_fts, rowid, plain_text, content, source_app, source_title)
   VALUES ('delete', old.id, old.plain_text, old.content, old.source_app, old.source_title);

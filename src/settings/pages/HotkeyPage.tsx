@@ -5,7 +5,6 @@ import { t } from "../../lib/i18n";
 import { useSettingsStore } from "../useSettingsStore";
 import { DEFAULT_HOTKEY, DEFAULT_PLAIN_HOTKEY, buildHotkey, formatHotkey, modifierCount } from "../hotkey";
 
-/** 录制哪一条热键。两个录制位共用一个监听状态机。 */
 type Which = "panel" | "plain";
 
 export function HotkeyPage() {
@@ -15,8 +14,6 @@ export function HotkeyPage() {
   const [recording, setRecording] = useState<Which | null>(null);
   const [hint, setHint] = useState<string | null>(null);
 
-  // 录制期间全局监听。挂 window 而不是按钮上，是因为用户可能按到别的元素上，
-  // 焦点跑了就录不到 —— 录制状态下应当无条件吃掉下一个组合键。
   useEffect(() => {
     if (!recording) return;
 
@@ -33,7 +30,6 @@ export function HotkeyPage() {
 
       const combo = buildHotkey(e);
       if (!combo) {
-        // 只按了修饰键，或按了 parse 不认识的键。继续等，不清空提示。
         setHint(t("hotkeyBadKey"));
         return;
       }

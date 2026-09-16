@@ -1,8 +1,3 @@
-//! F12 图片：剪贴板位图 → PNG 原图（`images/`）+ 缩略图（`thumbs/`）。
-//!
-//! 文件不塞进 SQLite，库里只存路径（`image_path` / `thumb_path`），
-//! 这与规格书第 5 节的约定一致。
-
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
@@ -11,13 +6,8 @@ use image::{ExtendedColorType, ImageEncoder};
 
 use crate::error::{Error, Result};
 
-/// 缩略图边长上限（F12：256px）。等比缩放，不裁切。
 pub const THUMB_MAX: u32 = 256;
 
-/// 把一张 RGBA 位图落成 PNG 原图 + 缩略图，返回两个文件路径。
-///
-/// `data_dir` 是应用数据目录（安装目录下的 `data/`），两个子目录在这里创建。
-/// 调用方已经算过哈希的路径应该用 `save_image_bytes`，避免二次编码。
 #[allow(dead_code)]
 pub fn save_image(
     data_dir: &Path,
@@ -28,8 +18,6 @@ pub fn save_image(
     save_image_bytes(data_dir, img, &png_bytes, hash)
 }
 
-/// 同上，但 PNG 字节由调用方提供 —— `monitor` 算哈希时已经编码过一次，
-/// 传下来就不必再编一遍。
 pub fn save_image_bytes(
     data_dir: &Path,
     img: &arboard::ImageData<'_>,
@@ -52,9 +40,6 @@ pub fn save_image_bytes(
     Ok((image_path, thumb_path))
 }
 
-/// RGBA → PNG 字节。arboard 给的是 `width * height * 4` 的裸 RGBA。
-///
-/// `pub(crate)` 是因为 monitor 要先拿 PNG 字节算哈希再决定要不要落盘。
 pub(crate) fn encode_png_pub(img: &arboard::ImageData<'_>) -> Result<Vec<u8>> {
     encode_png(img)
 }
@@ -73,7 +58,6 @@ fn encode_png(img: &arboard::ImageData<'_>) -> Result<Vec<u8>> {
     Ok(out)
 }
 
-/// 生成等比缩略图。小图（≤256px）原样返回，不做放大。
 fn make_thumb<'a>(img: &arboard::ImageData<'a>) -> arboard::ImageData<'a> {
     let w = img.width as u32;
     let h = img.height as u32;
@@ -86,9 +70,6 @@ fn make_thumb<'a>(img: &arboard::ImageData<'a>) -> arboard::ImageData<'a> {
         };
     }
 
-    // 手写一次盒式降采样 —— `image` crate 的 `thumbnail()` 走 DynamicImage，
-    // 多一次拷贝；原始 RGBA 直接盒采样更省。4×4 像素块平均（缩到 1/4 以内
-    // 时块更大），对剪贴板缩略图足够。
     let scale = (w.max(h) + THUMB_MAX - 1) / THUMB_MAX;
     let tw = (w / scale).max(1);
     let th = (h / scale).max(1);
@@ -161,7 +142,6 @@ mod tests {
     fn 编码出合法png() {
         let img = solid(8, 8, [18, 165, 148, 255]);
         let png = encode_png(&img).expect("PNG 编码失败");
-        // PNG 魔数
         assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
     }
 

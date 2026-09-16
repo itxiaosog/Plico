@@ -25,12 +25,10 @@ function Hl({ text, query }: { text: string; query: string }) {
 }
 
 function RichHtml({ html }: { html: string }) {
-  // srcDoc 是独立文档，颜色由 buildRichPreviewDoc 显式注入（单一像素主题，固定色值）。
   const srcDoc = useMemo(() => buildRichPreviewDoc(html), [html]);
   return (
     <iframe
       className="pl-preview__html"
-      // 空字符串 = 全部限制：禁脚本/表单/弹窗/导航，独立不透明源
       sandbox=""
       srcDoc={srcDoc}
       title={t("previewRichText")}
@@ -42,11 +40,8 @@ function Body({ item, query }: { item: Item; query: string }) {
   const text = item.plain_text ?? item.content ?? "";
   const copy = useCopyFeedback();
   const [codeLang, setCodeLang] = useState<string | null>(null);
-  // 带 HTML 的富文本直接渲染格式，不再对纯文本判代码
   const showHtml = item.type === "rich_text" && !!item.html_content;
 
-  // F20：只对「普通文本/富文本」判代码，其他类型各走各的分支。
-  // 检测走 IPC（mock 环境也有），别在前端复制一遍信号表。
   useEffect(() => {
     let dead = false;
     if (!showHtml && (item.type === "text" || item.type === "rich_text")) {
@@ -96,8 +91,7 @@ function Body({ item, query }: { item: Item; query: string }) {
       return (
         <>
           <div className="pl-link-preview__header">
-            {/* F20：真实 favicon 要联网取，与「零网络请求」冲突，所以用
-                域名首字母 + 稳定配色代替 —— 同样能一眼区分不同站点。 */}
+
             <span
               className="pl-link-preview__favicon"
               aria-hidden="true"
@@ -166,7 +160,6 @@ function Body({ item, query }: { item: Item; query: string }) {
       if (showHtml) {
         return <RichHtml html={item.html_content!} />;
       }
-      // 像代码就切等宽 + 简易着色（F20）；不像就按普通文本渲染。
       if (codeLang) {
         return (
           <pre className="pl-code">
